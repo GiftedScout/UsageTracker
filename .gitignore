@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+
+# 打包输出
+installer_output/
+
+# 数据目录（运行时生成）
+data/
+logs/
+bridge/
+feedback/
+reports/
+
+# 临时文件
+test_output/
+*.tmp
+_verify.py
+test_*.html
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# WorkBuddy
+.workbuddy/
