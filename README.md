@@ -1,189 +1,143 @@
-# UsageTracker
-
-> Windows 桌面应用使用时长追踪工具 —— 静默运行在系统托盘，自动记录你的屏幕时间。
+<h1 align="center">🖥️ UsageTracker</h1>
 
 <p align="center">
-  <img src="assets/icon.ico" width="80" alt="UsageTracker Icon">
+  <b>Windows 桌面应用使用时长追踪工具</b><br>
+  静默驻守系统托盘，毫秒级感知你的每一次窗口切换
 </p>
 
-**版本**: v0.1.0 · **平台**: Windows 10/11 · **许可证**: MIT
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v0.1.0--beta-blue" alt="Version">
+  <img src="https://img.shields.io/badge/platform-Windows_10%2F11-0078D6" alt="Platform">
+  <img src="https://img.shields.io/badge/python-3.11%2B-3776AB" alt="Python">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+</p>
 
 ---
 
-## ✨ 功能亮点
+### 🌟 极致核心特色 (Core Features)
 
-| 功能 | 说明 |
-|------|------|
-| 🖥️ **自动追踪** | 每 5 秒检测前台窗口，区分活跃/最小化，精确到秒 |
-| 🌐 **浏览器识别** | 自动识别 Chrome/Edge/Firefox 等 7 种浏览器，分别统计 |
-| 🎮 **游戏检测** | Steam 库扫描 + 米哈游注册表探测 + 白名单匹配 |
-| 📊 **可视化报告** | 日报/周报/月报，内置 3 套主题 + Chart.js 图表 |
-| 🔔 **超时提醒** | 浏览器/游戏使用超时 Toast 通知 |
-| ⚙️ **图形设置** | tkinter 设置面板，支持忽略名单、分类管理、日志查看 |
-| 🚀 **一键忽略** | 在 HTML 报告中直接点击忽略按钮，无需打开设置 |
-| 💾 **开机自启** | 安装时可选开启，静默启动不弹窗 |
+- **🪟 毫秒级窗口感知 (Window Tracking Engine)**：底层调用 Windows `GetForegroundWindow` / `IsIconic` API，每 5 秒精准轮询前台窗口，严格区分活跃焦点与最小化挂起状态，真正做到"你用什么，它就记什么"。
+- **🌐 智能浏览器分账 (Browser Recognition)**：自动识别 Chrome、Edge、Firefox 等 7 种主流浏览器进程，每种浏览器独立统计时长，告别笼统的"浏览器"大类，精确掌控你的上网时间分布。
+- **🎮 硬核游戏检测矩阵 (Game Detection)**：三重识别引擎并行运作——Steam 本地库扫描、米哈游注册表特征探测、已知游戏白名单兜底，无论是 3A 大作还是独立小品，统统无处遁形。
+- **📊 三套美学报告引擎 (Visual Report Generator)**：日报 / 周报 / 月报全自动生成，内嵌 Chart.js 交互图表，提供 🌸童话风 / 💼商务风 / 📝极简风 三套精心打磨的 CSS 主题，数据可视化不再千篇一律。
+- **🔔 智能超时熔断提醒 (Usage Alert System)**：浏览器与游戏使用时长触发阈值后，Windows 原生 Toast 通知即时弹出，温柔但坚定地提醒你"该休息了"。
+- **🚀 报告内一键忽略 (In-Report Ignore)**：直接在 HTML 日报中点击应用旁的忽略按钮，通过本地 HTTP Bridge 链路即时生效，无需再打开设置面板手动配置。
+- **🛡️ 零入侵隐私架构 (Privacy-First)**：所有数据严格存储于本地安装目录，不联网、不上传、无遥测、无广告、无第三方 SDK。开源代码，完全可审计。
 
-## 📁 项目结构
+---
 
-```
-UsageTracker/
-├── src/                      # 核心模块
-│   ├── main.py               # 入口：初始化 → 启动追踪 → 系统托盘
-│   ├── tracker.py            # 窗口追踪引擎（Win32 API）
-│   ├── data_store.py         # SQLite 数据存储 + 日聚合
-│   ├── app_classifier.py     # 应用分类（浏览器/游戏/系统）
-│   ├── config_manager.py     # 配置管理（JSON）
-│   ├── reporter.py           # HTML 报告生成器（日报/周报/月报）
-│   ├── notifier.py           # Windows Toast 通知
-│   ├── bridge_handler.py     # 报告↔主进程 HTTP 通信
-│   ├── startup_manager.py    # 开机自启管理
-│   ├── crash_handler.py      # 崩溃捕获与日志
-│   ├── constants.py          # 全局常量 + 路径 + 旧数据迁移
-│   ├── singleton.py          # 单例模式
-│   └── version.py            # 版本号
-├── ui/                       # 设置界面（tkinter）
-│   ├── settings_window.py    # 设置主窗口
-│   ├── tab_general.py        # 通用设置
-│   ├── tab_browsers.py       # 浏览器管理
-│   ├── tab_games.py          # 游戏管理
-│   ├── tab_categories.py     # 分类规则
-│   ├── tab_ignore.py         # 忽略名单
-│   ├── tab_database.py       # 数据库管理
-│   └── tab_feedback.py       # 运行日志 + 反馈导出
-├── assets/
-│   ├── icon.ico              # 应用图标
-│   ├── chart.umd.min.js      # Chart.js（内嵌到报告）
-│   └── themes/               # 报告主题
-│       ├── fairy_tale.css    # 🌸 童话风（默认）
-│       ├── business.css      # 💼 商务风
-│       └── minimal.css       # 📝 极简风
-├── installer.iss             # Inno Setup 安装脚本
-├── requirements.txt          # Python 依赖
-└── docs/                     # 设计文档
-    ├── design-report-v0.1.0-beta.md
-    └── roadmap-v0.2.0.md
-```
+### 🛠️ 关于本地部署 (Local Execution)
 
-## 🚀 快速开始
-
-### 从安装包安装（推荐）
-
-1. 前往 [Releases](../../releases) 下载最新安装包
-2. 运行 `UsageTracker_Setup_0.1.0-beta.exe`
-3. 安装向导中勾选「开机自动启动」
-4. 安装完成后程序自动运行，最小化到系统托盘
-
-### 从源码运行（开发者）
-
-**环境要求**：
-- Python 3.11+
-- Windows 10/11
+本项目秉持 **"大道至简"** 的架构理念，零配置起飞。克隆仓库后只需三步即可启动：
 
 ```bash
-# 克隆仓库
-git clone https://github.com/chaos/UsageTracker.git
+# 1. 克隆仓库
+git clone https://github.com/GiftedScout/UsageTracker.git
 cd UsageTracker
 
-# 创建虚拟环境
+# 2. 创建虚拟环境并安装依赖
 python -m venv .venv
 .venv\Scripts\activate
-
-# 安装依赖
 pip install -r requirements.txt
 
-# 启动
+# 3. 启动追踪引擎
 python -m src.main
 ```
 
-> 启动后程序最小化到系统托盘（右下角），右键托盘图标可打开日报或设置。
+> 💡 启动后程序自动最小化到系统托盘（右下角），右键托盘图标即可打开日报、切换报告主题或进入设置面板。
 
-### 打包安装包
+---
+
+### 📦 关于安装包构建 (Build Installer)
+
+项目采用 **PyInstaller + Inno Setup** 双阶段打包，输出标准 Windows 安装程序（含中文向导、开机自启、桌面快捷方式）：
 
 ```bash
-# 安装打包工具
+# 安装打包依赖
 pip install pyinstaller
 
-# 打包为 exe（单目录模式）
+# 第一阶段：PyInstaller → 单目录 exe
 pyinstaller UsageTracker.spec
 
-# 用 Inno Setup 生成安装包
+# 第二阶段：Inno Setup → 安装包（需安装 Inno Setup）
 iscc installer.iss
 ```
 
-安装包输出到 `installer_output/UsageTracker_Setup_0.1.0-beta.exe`
+> 安装包输出至 `installer_output/UsageTracker_Setup_0.1.0-beta.exe`（约 14.5 MB）
 
-## 📊 报告预览
+---
 
-UsageTracker 生成精美的 HTML 报告，支持 3 种主题风格：
+### 📁 项目文件结构 (Project Structure)
 
-- 🌸 **童话风** — 柔和渐变 + 圆角卡片，默认主题
-- 💼 **商务风** — 深色调 + 清晰对比
-- 📝 **极简风** — 留白充足，数据优先
+| 文件 / 文件夹 | 说明 |
+|:---|:---|
+| `src/` | 核心业务模块（追踪引擎、数据存储、报告生成、通知系统等） |
+| `ui/` | tkinter 图形设置界面（7 个功能标签页） |
+| `assets/` | 静态资源（应用图标、Chart.js、报告主题 CSS） |
+| `docs/` | 设计文档（详细设计报告 + v0.2.0 路线图） |
+| `installer.iss` | Inno Setup 安装脚本 |
+| `requirements.txt` | Python 依赖清单 |
+| `LICENSE` | MIT 开源许可证 |
 
-报告包含：使用时长饼图、分类柱状图、应用排行榜、游戏时长对比等。
+---
 
-## 🔧 配置说明
+### ⚙️ 核心配置说明 (Configuration)
 
-配置文件位于安装目录下 `config/config.json`，也可通过设置界面修改：
+配置文件位于安装目录下 `config/config.json`，也可通过图形设置面板实时修改：
 
 | 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `poll_interval` | 5 | 追踪轮询间隔（秒） |
-| `browser_limit` | 120 | 浏览器超时提醒（分钟） |
-| `game_limit` | 60 | 游戏超时提醒（分钟） |
-| `report_theme` | fairy_tale | 报告主题 |
-| `ignored_apps` | [] | 忽略的应用列表 |
-| `notifications_enabled` | true | 是否启用超时通知 |
+|:---|:---|:---|
+| `poll_interval` | `5` | 窗口检测轮询间隔（秒） |
+| `browser_limit` | `120` | 浏览器超时提醒阈值（分钟） |
+| `game_limit` | `60` | 游戏超时提醒阈值（分钟） |
+| `report_theme` | `fairy_tale` | 报告主题（fairy_tale / business / minimal） |
+| `ignored_apps` | `[]` | 忽略的应用列表 |
+| `notifications_enabled` | `true` | 是否启用超时通知 |
 
-## 🗂️ 数据存储
+---
 
-所有数据存储在**安装目录**下，卸载时默认保留：
+### 🛠️ 技术栈 (Tech Stack)
 
-```
-{安装目录}/
-├── data/
-│   └── usage_data.db      # SQLite 数据库
-├── config/
-│   └── config.json         # 用户配置
-├── reports/                 # HTML 报告
-├── logs/                    # 运行日志
-├── bridge/                  # 报告通信临时文件
-└── feedback/                # 反馈导出包
-```
-
-## 🛡️ 隐私声明
-
-- **所有数据仅存储在本地**，不联网、不上传
-- 无遥测、无广告、无第三方 SDK
-- 开源代码，可自行审计
-
-## 🛠️ 技术栈
-
-| 层级 | 技术 |
-|------|------|
+| 层级 | 技术选型 |
+|:---|:---|
 | 语言 | Python 3.11+ |
-| GUI | tkinter（系统托盘：pystray + Pillow） |
+| GUI | tkinter + pystray + Pillow |
 | 数据库 | SQLite（标准库） |
-| 图表 | Chart.js（CDN 内嵌） |
+| 图表 | Chart.js（内嵌至报告） |
 | 打包 | PyInstaller → Inno Setup |
-| 进程通信 | HTTP (127.0.0.1:19234) |
+| 进程通信 | HTTP Bridge (127.0.0.1:19234) |
 
-## 📋 依赖
+---
 
-```
-psutil>=5.9.0      # 进程信息
-pystray>=0.19.0    # 系统托盘
-Pillow>=10.0.0     # 图标渲染
-```
-
-## 🗺️ 路线图
+### 🗺️ 版本路线图 (Roadmap)
 
 详见 [docs/roadmap-v0.2.0.md](docs/roadmap-v0.2.0.md)
 
-- [ ] **v0.2.0** — 事件驱动追踪、自动更新、代码签名
-- [ ] **v0.3.0** — 数据导出（CSV/PDF）、多语言、周报自动邮件
-- [ ] **v1.0.0** — 插件系统、跨平台（macOS/Linux）
+- [ ] **v0.2.0** — 事件驱动追踪（替代轮询）、自动更新机制、代码签名
+- [ ] **v0.3.0** — 数据导出（CSV / PDF）、多语言支持、周报自动生成
+- [ ] **v1.0.0** — 插件系统、跨平台适配（macOS / Linux）
 
-## 📄 许可证
+---
 
-[MIT](LICENSE) © 2026 chaos
+### ✉️ 关于开发者 (About Developer)
+
+**UsageTracker** 由 **chaos** 独立设计与开发，首发于 2026 年春季。
+
+> 本项目完全出于个人需求驱动——我想知道自己每天的时间究竟去了哪里。
+
+---
+
+### 🔗 相关链接 (Links)
+
+| 类型 | 链接 |
+|:---|:---|
+| GitHub 仓库 | https://github.com/GiftedScout/UsageTracker |
+| 许可证 | [MIT](LICENSE) |
+| v0.2.0 路线图 | [docs/roadmap-v0.2.0.md](docs/roadmap-v0.2.0.md) |
+| 详细设计报告 | [docs/design-report-v0.1.0-beta.md](docs/design-report-v0.1.0-beta.md) |
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ by chaos · Licensed under MIT</sub>
+</p>
