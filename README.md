@@ -2,33 +2,78 @@
 
 <p align="center">
   <b>Windows 桌面应用使用时长追踪工具</b><br>
-  静默驻守系统托盘，毫秒级感知你的每一次窗口切换
+  轻量静默驻守系统托盘，自动记录你的屏幕时间
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-v0.1.0--beta-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows_10%2F11-0078D6" alt="Platform">
-  <img src="https://img.shields.io/badge/python-3.11%2B-3776AB" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
 ---
 
-### 🌟 极致核心特色 (Core Features)
+### 🎯 如何使用 (How to Use)
 
-- **🪟 毫秒级窗口感知 (Window Tracking Engine)**：底层调用 Windows `GetForegroundWindow` / `IsIconic` API，每 5 秒精准轮询前台窗口，严格区分活跃焦点与最小化挂起状态，真正做到"你用什么，它就记什么"。
-- **🌐 智能浏览器分账 (Browser Recognition)**：自动识别 Chrome、Edge、Firefox 等 7 种主流浏览器进程，每种浏览器独立统计时长，告别笼统的"浏览器"大类，精确掌控你的上网时间分布。
-- **🎮 硬核游戏检测矩阵 (Game Detection)**：三重识别引擎并行运作——Steam 本地库扫描、米哈游注册表特征探测、已知游戏白名单兜底，无论是 3A 大作还是独立小品，统统无处遁形。
-- **📊 三套美学报告引擎 (Visual Report Generator)**：日报 / 周报 / 月报全自动生成，内嵌 Chart.js 交互图表，提供 🌸童话风 / 💼商务风 / 📝极简风 三套精心打磨的 CSS 主题，数据可视化不再千篇一律。
-- **🔔 智能超时熔断提醒 (Usage Alert System)**：浏览器与游戏使用时长触发阈值后，Windows 原生 Toast 通知即时弹出，温柔但坚定地提醒你"该休息了"。
-- **🚀 报告内一键忽略 (In-Report Ignore)**：直接在 HTML 日报中点击应用旁的忽略按钮，通过本地 HTTP Bridge 链路即时生效，无需再打开设置面板手动配置。
-- **🛡️ 零入侵隐私架构 (Privacy-First)**：所有数据严格存储于本地安装目录，不联网、不上传、无遥测、无广告、无第三方 SDK。开源代码，完全可审计。
+#### 📥 直接使用（推荐）
+
+**不想折腾代码？直接下载安装包即可：**
+
+🔗 **[👉 前往 Releases 页面下载安装包](../../releases)**
+
+1. 下载最新的 `UsageTracker_Setup_x.x.x.exe`
+2. 双击运行安装向导，按提示勾选「开机自动启动」
+3. 安装完成后程序自动启动，最小化到右下角托盘
+
+> 💡 日常使用无需任何操作，程序会在后台默默记录。右键托盘图标可以查看今日日报、打开设置等。
+
+#### 📊 查看报告
+
+- **今日日报**：右键托盘图标 → 点击「今日日报」
+- **周报 / 月报**：右键托盘图标 → 点击「上周周报」或「上月月报」
+- 报告以精美 HTML 页面打开，包含时长饼图、应用排行榜、游戏时长对比等
+- 支持 🌸童话风 / 💼商务风 / 📝极简风 三套主题，在设置中切换
+
+#### ⚙️ 常用设置
+
+右键托盘图标 → 「设置」，可调整：
+
+| 功能 | 说明 |
+|:---|:---|
+| **通用** | 修改报告主题、调整追踪间隔、开关超时通知 |
+| **忽略名单** | 添加不想被统计的程序（如文件管理器、IDE 等） |
+| **超时提醒** | 自定义浏览器 / 游戏的使用时长上限 |
+| **浏览器管理** | 查看已识别的浏览器列表 |
+| **游戏管理** | 手动添加自定义游戏 |
+| **数据库管理** | 清理过期数据、导出数据库 |
+| **运行日志** | 查看程序运行日志、导出反馈包 |
+
+#### 🚫 在报告中忽略应用
+
+打开日报后，应用明细表每行右侧有一个 **✕** 按钮，点击即可忽略该应用，下次报告将不再显示。
 
 ---
 
-### 🛠️ 关于本地部署 (Local Execution)
+### 🌟 核心特色 (Features)
 
-本项目秉持 **"大道至简"** 的架构理念，零配置起飞。克隆仓库后只需三步即可启动：
+- **🪟 自动追踪**：开机即运行，自动记录你使用了哪些应用、用了多久，无需手动操作
+- **🌐 浏览器分类**：Chrome、Edge、Firefox 等浏览器分别统计，精准掌握上网时间
+- **🎮 游戏识别**：自动识别 Steam 游戏、米哈游系列等，独立记录游戏时长
+- **📊 可视化报告**：日报 / 周报 / 月报，带交互图表，三套主题随心切换
+- **🔔 超时提醒**：浏览器或游戏使用过久时弹出系统通知，提醒你休息
+- **🛡️ 纯本地运行**：不联网、不上传、无广告，所有数据仅存于你的电脑
+
+---
+
+### ⬇️ 以下内容仅供开发者阅读
+
+> ⚠️ **如果你只是想使用本软件，上方内容已经足够。以下为开发相关文档，非开发者无需继续阅读。**
+
+---
+
+### 🛠️ 关于本地开发 (Development)
+
+本项目采用 **Python 3.11+** 开发，依赖极简（仅 3 个），克隆后三步即可启动：
 
 ```bash
 # 1. 克隆仓库
@@ -40,17 +85,17 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3. 启动追踪引擎
+# 3. 启动
 python -m src.main
 ```
 
-> 💡 启动后程序自动最小化到系统托盘（右下角），右键托盘图标即可打开日报、切换报告主题或进入设置面板。
+> 启动后程序最小化到系统托盘（右下角），右键托盘图标可打开日报或设置面板。
 
 ---
 
 ### 📦 关于安装包构建 (Build Installer)
 
-项目采用 **PyInstaller + Inno Setup** 双阶段打包，输出标准 Windows 安装程序（含中文向导、开机自启、桌面快捷方式）：
+项目采用 **PyInstaller + Inno Setup** 双阶段打包：
 
 ```bash
 # 安装打包依赖
@@ -63,8 +108,6 @@ pyinstaller UsageTracker.spec
 iscc installer.iss
 ```
 
-> 安装包输出至 `installer_output/UsageTracker_Setup_0.1.0-beta.exe`（约 14.5 MB）
-
 ---
 
 ### 📁 项目文件结构 (Project Structure)
@@ -72,27 +115,12 @@ iscc installer.iss
 | 文件 / 文件夹 | 说明 |
 |:---|:---|
 | `src/` | 核心业务模块（追踪引擎、数据存储、报告生成、通知系统等） |
-| `ui/` | tkinter 图形设置界面（7 个功能标签页） |
+| `ui/` | 图形设置界面（7 个功能标签页） |
 | `assets/` | 静态资源（应用图标、Chart.js、报告主题 CSS） |
 | `docs/` | 设计文档（详细设计报告 + v0.2.0 路线图） |
 | `installer.iss` | Inno Setup 安装脚本 |
 | `requirements.txt` | Python 依赖清单 |
 | `LICENSE` | MIT 开源许可证 |
-
----
-
-### ⚙️ 核心配置说明 (Configuration)
-
-配置文件位于安装目录下 `config/config.json`，也可通过图形设置面板实时修改：
-
-| 配置项 | 默认值 | 说明 |
-|:---|:---|:---|
-| `poll_interval` | `5` | 窗口检测轮询间隔（秒） |
-| `browser_limit` | `120` | 浏览器超时提醒阈值（分钟） |
-| `game_limit` | `60` | 游戏超时提醒阈值（分钟） |
-| `report_theme` | `fairy_tale` | 报告主题（fairy_tale / business / minimal） |
-| `ignored_apps` | `[]` | 忽略的应用列表 |
-| `notifications_enabled` | `true` | 是否启用超时通知 |
 
 ---
 
@@ -105,7 +133,7 @@ iscc installer.iss
 | 数据库 | SQLite（标准库） |
 | 图表 | Chart.js（内嵌至报告） |
 | 打包 | PyInstaller → Inno Setup |
-| 进程通信 | HTTP Bridge (127.0.0.1:19234) |
+| 依赖 | 仅 psutil + pystray + Pillow，极致轻量 |
 
 ---
 
