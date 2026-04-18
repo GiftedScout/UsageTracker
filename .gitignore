@@ -5,7 +5,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-*.spec
 
 # 打包输出
 installer_output/
