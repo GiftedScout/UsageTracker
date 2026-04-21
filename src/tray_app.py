@@ -15,6 +15,7 @@ import pystray
 
 from .version import VERSION, APP_NAME
 from .constants import TOOLTIP_UPDATE_INTERVAL
+from .i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +39,14 @@ class TrayApp:
             icon=icon_image,
             title=APP_NAME,
             menu=pystray.Menu(
-                pystray.MenuItem('昨日日报', self._open_daily),
-                pystray.MenuItem('上周周报', self._open_weekly),
-                pystray.MenuItem('上月月报', self._open_monthly),
+                pystray.MenuItem(t('tray.yesterday_report'), self._open_daily),
+                pystray.MenuItem(t('tray.last_week_report'), self._open_weekly),
+                pystray.MenuItem(t('tray.last_month_report'), self._open_monthly),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem('设置', self._open_settings, default=True),
-                pystray.MenuItem(f'关于 ({VERSION})', self._show_about, enabled=False),
+                pystray.MenuItem(t('tray.settings'), self._open_settings, default=True),
+                pystray.MenuItem(f'{t("tray.about")} ({VERSION})', self._show_about, enabled=False),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem('退出', self._quit),
+                pystray.MenuItem(t('tray.exit'), self._quit),
             ),
             on_double_click=self._open_daily,
         )
@@ -94,7 +95,7 @@ class TrayApp:
                     self._report_gen.open_report(path)
                 else:
                     logger.info('没有日报数据')
-                    self._notify_no_data('暂无使用记录，稍后再试')
+                    self._notify_no_data(t('tray.no_data'))
                 return
             elif report_type == 'weekly':
                 today = date.today()
@@ -136,9 +137,9 @@ class TrayApp:
                         from .data_store import DataStore
                         b = DataStore.format_duration(report.browser_seconds)
                         g = DataStore.format_duration(report.game_seconds)
-                        self.icon.title = f'UsageTracker | 昨日：浏览器 {b} / 游戏 {g}'
+                        self.icon.title = f'UsageTracker | {t("tray.tooltip_yesterday", browser=b, game=g)}'
                     else:
-                        self.icon.title = f'{APP_NAME} | 暂无历史数据'
+                        self.icon.title = f'{APP_NAME} | {t("tray.tooltip_no_data")}'
             except Exception as e:
                 logger.debug('更新 tooltip 失败: %s', e)
             self._stop_event.wait(TOOLTIP_UPDATE_INTERVAL)

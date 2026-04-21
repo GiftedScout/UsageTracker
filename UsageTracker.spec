@@ -13,6 +13,7 @@ a = Analysis(
         (str(proj / 'assets' / 'themes'), 'assets/themes'),
         (str(proj / 'assets' / 'chart.umd.min.js'), 'assets'),
         (str(proj / 'assets' / 'icon.ico'), 'assets'),
+        (str(proj / 'locales'), 'locales'),
     ],
     hiddenimports=['psutil', 'pystray', 'PIL', 'tkinter', 'tkinter.ttk', 'tkinter.messagebox', 'tkinter.filedialog'],
     hookspath=[],

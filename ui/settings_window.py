@@ -4,6 +4,8 @@ import tkinter as tk
 from tkinter import ttk
 import logging
 
+from src.i18n import t
+
 from .tab_general import TabGeneral
 from .tab_categories import TabCategories
 from .tab_browsers import TabBrowsers
@@ -27,7 +29,7 @@ class SettingsWindow:
         self._crash_handler = crash_handler
 
         self._window = tk.Toplevel(parent) if parent else tk.Tk()
-        self._window.title('UsageTracker 设置')
+        self._window.title(t('settings.title'))
         self._window.geometry('700x500')
         self._window.resizable(True, True)
         self._window.protocol('WM_DELETE_WINDOW', self._on_cancel)
@@ -52,13 +54,13 @@ class SettingsWindow:
         nb.pack(fill='both', expand=True, padx=8, pady=(8, 0))
 
         tabs_data = [
-            ('通用设置', TabGeneral),
-            ('分类管理', TabCategories),
-            ('浏览器管理', TabBrowsers),
-            ('游戏目录', TabGames),
-            ('忽略名单', TabIgnore),
-            ('数据库管理', TabDatabase),
-            ('运行日志与反馈', TabFeedback),
+            (t('settings.general'), TabGeneral),
+            (t('settings.categories'), TabCategories),
+            (t('settings.browsers'), TabBrowsers),
+            (t('settings.games'), TabGames),
+            (t('settings.ignore'), TabIgnore),
+            (t('settings.database'), TabDatabase),
+            (t('settings.feedback'), TabFeedback),
         ]
 
         for label, cls in tabs_data:
@@ -71,23 +73,15 @@ class SettingsWindow:
         btn_frame.pack(fill='x', padx=8, pady=8)
         btn_frame.columnconfigure(0, weight=1)
 
-        ttk.Button(btn_frame, text='确定', width=8,
+        ttk.Button(btn_frame, text=t('settings.ok'), width=8,
                    command=self._on_ok).grid(row=0, column=1, padx=4)
-        ttk.Button(btn_frame, text='取消', width=8,
+        ttk.Button(btn_frame, text=t('settings.cancel'), width=8,
                    command=self._on_cancel).grid(row=0, column=2, padx=4)
-        ttk.Button(btn_frame, text='应用', width=8,
+        ttk.Button(btn_frame, text=t('settings.apply'), width=8,
                    command=self._on_apply).grid(row=0, column=3, padx=4)
 
     def _get_tab_kwargs(self, cls):
         """根据标签页类返回构造参数"""
-        from .tab_general import TabGeneral
-        from .tab_categories import TabCategories
-        from .tab_browsers import TabBrowsers
-        from .tab_games import TabGames
-        from .tab_ignore import TabIgnore
-        from .tab_database import TabDatabase
-        from .tab_feedback import TabFeedback
-
         if cls is TabGeneral:
             return {'config_manager': self._config, 'startup_manager': self._startup}
         elif cls is TabCategories:

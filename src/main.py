@@ -49,15 +49,18 @@ def _show_privacy_dialog():
     import tkinter as tk
     from tkinter import ttk
     from src.config_manager import ConfigManager
+    from src.i18n import init as init_i18n, t
 
     config = ConfigManager()
+    # 隐私对话框在 i18n 初始化之前，先根据 config.language 加载
+    init_i18n(config.language)
     if config.privacy_accepted:
         return config
 
     result = {'accepted': False}
 
     root = tk.Tk()
-    root.title('UsageTracker - 隐私声明')
+    root.title(t('privacy.title'))
     root.geometry('420x280')
     root.resizable(False, False)
 
@@ -69,10 +72,8 @@ def _show_privacy_dialog():
     root.geometry(f'+{x}+{y}')
     root.deiconify()
 
-    ttk.Label(root, text='隐私声明', font=('', 14, 'bold')).pack(pady=(20, 10))
-    ttk.Label(root, text='UsageTracker 仅在本地设备记录您的应用使用时长。\n'
-                           '所有数据存储在本地，不会联网上传。\n'
-                           '我们尊重您的隐私，不会收集任何个人信息。',
+    ttk.Label(root, text=t('privacy.title'), font=('', 14, 'bold')).pack(pady=(20, 10))
+    ttk.Label(root, text=t('privacy.content'),
               wraplength=380, justify='center').pack(pady=10)
 
     def on_accept():
@@ -86,8 +87,8 @@ def _show_privacy_dialog():
 
     btn_frame = ttk.Frame(root)
     btn_frame.pack(pady=20)
-    ttk.Button(btn_frame, text='我已了解，继续使用', command=on_accept).pack(side='left', padx=8)
-    ttk.Button(btn_frame, text='退出', command=on_decline).pack(side='left', padx=8)
+    ttk.Button(btn_frame, text=t('privacy.accept'), command=on_accept).pack(side='left', padx=8)
+    ttk.Button(btn_frame, text=t('privacy.decline'), command=on_decline).pack(side='left', padx=8)
 
     root.mainloop()
     return config if result['accepted'] else None
@@ -109,7 +110,8 @@ def _run_app():
     if instance.already_running:
         logger.info('已有实例运行，退出')
         import ctypes
-        ctypes.windll.user32.MessageBoxW(0, 'UsageTracker 已在运行中。', '提示', 0x40)
+        from src.i18n import t
+        ctypes.windll.user32.MessageBoxW(0, t('singleton.running'), t('dialog.hint'), 0x40)
         return 0
 
     # 首次启动隐私声明
@@ -117,6 +119,10 @@ def _run_app():
     if config is None:
         logger.info('用户未接受隐私声明，退出')
         return 0
+
+    # 初始化国际化
+    from src.i18n import init as init_i18n
+    init_i18n(config.language)
 
     # 初始化模块（复用已接受隐私声明的 config，不再重新实例化）
     from src.data_store import DataStore
@@ -161,61 +167,58 @@ def _run_app():
 
     _last_saved_dur: dict[int, float] = {}  # id(session) -> 上次已保存秒数
 
+    def _save_session_data(session):
+        """通用保存逻辑：计算增量并写入数据库"""
+        try:
+            cat = classifier.classify(
+                session.name, session.window_title, session.exe_path)
+            if cat == 'skip':
+                return
+            sid = id(session)
+            prev = _last_saved_dur.get(sid, 0.0)
+            delta = session.duration_seconds - prev
+            if delta < 1:  # 不足1秒不写
+                return
+            data_store.save_session(
+                session.name, cat, delta,
+                session.start_time.date().isoformat(),
+                session.exe_path)
+            _last_saved_dur[sid] = session.duration_seconds
+        except Exception as e:
+            logger.error('保存 session 数据失败: %s', e)
+
     def _auto_save():
         while not tracker._stop_event.is_set():
             tracker._stop_event.wait(AUTO_SAVE_INTERVAL)
             if tracker._stop_event.is_set():
                 break
+            # 保存已结束的 session
             for session in tracker.sessions:
-                tracker._update_current_duration()
                 if session.duration_seconds < MIN_AUTO_SAVE_DURATION:
                     continue
-                try:
-                    cat = classifier.classify(
-                        session.name, session.window_title, session.exe_path)
-                    if cat == 'skip':
-                        continue
-                    sid = id(session)
-                    prev = _last_saved_dur.get(sid, 0.0)
-                    delta = session.duration_seconds - prev
-                    if delta < 1:  # 不足1秒不写
-                        continue
-                    data_store.save_session(
-                        session.name, cat, delta,
-                        session.start_time.date().isoformat(),
-                        session.exe_path)
-                    _last_saved_dur[sid] = session.duration_seconds
-                except Exception as e:
-                    logger.error('自动保存失败: %s', e)
+                _save_session_data(session)
+            # 同时保存当前活跃 session（修复：原版遗漏导致崩溃时数据丢失）
+            if tracker.current_session:
+                tracker._update_current_duration()
+                _save_session_data(tracker.current_session)
 
     save_thread = threading.Thread(target=_auto_save, daemon=True, name='auto-save')
     save_thread.start()
 
-    # 通知回调 — 先将当前 session 持久化再读 DB 统计，避免重复叠加
+    # 通知回调 — 保存剩余增量 + 通知（不再 pop，防止 _auto_save 重复保存）
     def _on_session_end(old_session, new_session):
         if not old_session:
             return
         cat = classifier.classify(
             old_session.name, old_session.window_title, old_session.exe_path)
+        # 所有非 skip 分类都保存数据（修复：原版跳过 'other' 导致数据丢失）
+        if cat != 'skip' and old_session.duration_seconds >= MIN_AUTO_SAVE_DURATION:
+            _save_session_data(old_session)
         if cat in ('skip', 'other'):
             return
         # 仅对 browser / game 做通知
         from datetime import date as _date
         today = _date.today().isoformat()
-        # 写入增量（_auto_save 已保存部分，这里只补剩余）
-        if old_session.duration_seconds >= 10:
-            try:
-                sid = id(old_session)
-                prev = _last_saved_dur.get(sid, 0.0)
-                delta = old_session.duration_seconds - prev
-                if delta >= 1:
-                    data_store.save_session(
-                        old_session.name, cat, delta,
-                        today, old_session.exe_path)
-                    _last_saved_dur.pop(sid, None)
-            except Exception as e:
-                logger.error('session_end 保存失败: %s', e)
-        # 读 DB 中已持久化的总量（不再额外加 old_session.duration_seconds）
         records = data_store.get_daily_usage(today)
         total = sum(r.duration_seconds for r in records if r.category == cat)
         alerts = notifier.update_usage(cat, total)
@@ -273,6 +276,12 @@ def _run_app():
 
     def _on_quit():
         logger.info('正在退出...')
+        # 退出前保存所有 pending 数据（修复：原版不保存导致退出时丢失当前 session）
+        tracker._update_current_duration()
+        if tracker.current_session:
+            _save_session_data(tracker.current_session)
+        for session in tracker.sessions:
+            _save_session_data(session)
         tracker.stop()
         bridge.stop_polling()
         if tray_app:
@@ -294,6 +303,14 @@ def _run_app():
         # 启动追踪
         tracker.start()
         logger.info('UsageTracker 已启动')
+
+        # 开机自动弹出昨日报告（延迟 8 秒，等系统稳定）
+        if config.auto_show_daily_report:
+            def _auto_open_report():
+                tracker._stop_event.wait(8)
+                if not tracker._stop_event.is_set():
+                    tray_app_obj._open_daily()
+            threading.Thread(target=_auto_open_report, daemon=True, name='auto-report').start()
 
         # 运行托盘（阻塞）
         tray_app_obj.run()

@@ -4,6 +4,8 @@ import tkinter as tk
 from tkinter import ttk
 import logging
 
+from src.i18n import t
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_BROWSERS = {
@@ -24,7 +26,7 @@ class TabBrowsers(ttk.Frame):
     def _build(self):
         self.columnconfigure(0, weight=1)
 
-        ttk.Label(self, text='已识别的浏览器', font=('', 9, 'bold')).grid(
+        ttk.Label(self, text=t('browsers.detected'), font=('', 9, 'bold')).grid(
             row=0, column=0, sticky='w', padx=12, pady=(8, 4))
 
         self._count_label = ttk.Label(self, text='')
@@ -37,11 +39,11 @@ class TabBrowsers(ttk.Frame):
         btn_frame = ttk.Frame(self)
         btn_frame.grid(row=3, column=0, sticky='ew', padx=12, pady=4)
 
-        ttk.Label(btn_frame, text='进程名:').pack(side='left')
+        ttk.Label(btn_frame, text=t('browsers.process_name')).pack(side='left')
         self._add_var = tk.StringVar()
         ttk.Entry(btn_frame, textvariable=self._add_var, width=20).pack(side='left', padx=4)
-        ttk.Button(btn_frame, text='添加', command=self._add_browser).pack(side='left')
-        ttk.Button(btn_frame, text='移除选中', command=self._remove_browser).pack(side='left', padx=4)
+        ttk.Button(btn_frame, text=t('browsers.add'), command=self._add_browser).pack(side='left')
+        ttk.Button(btn_frame, text=t('browsers.remove_selected'), command=self._remove_browser).pack(side='left', padx=4)
 
         self._populate()
 
@@ -55,16 +57,16 @@ class TabBrowsers(ttk.Frame):
         all_browsers = DEFAULT_BROWSERS | custom
         for exe in sorted(all_browsers):
             if exe in custom and exe not in DEFAULT_BROWSERS:
-                tag = ' [自定义]'
+                tag = t('browsers.tag_custom')
             elif exe not in installed:
-                tag = ' [未检测到]'
+                tag = t('browsers.tag_missing')
             else:
                 tag = ''
             self._listbox.insert('end', f'{exe}{tag}')
         det = len(installed & DEFAULT_BROWSERS)
         cus = len(custom)
         self._count_label.config(
-            text=f'已检测 {det} 个  |  自定义 {cus} 个')
+            text=t('browsers.count', detected=det, custom=cus))
 
     def _add_browser(self):
         name = self._add_var.get().strip().lower()

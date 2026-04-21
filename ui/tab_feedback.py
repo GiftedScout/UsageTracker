@@ -6,6 +6,8 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from src.i18n import t
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,13 +24,13 @@ class TabFeedback(ttk.Frame):
         pad = {'padx': 12, 'pady': 6, 'sticky': 'ew'}
 
         # 运行日志
-        ttk.Label(self, text='运行日志', font=('', 9, 'bold')).grid(
+        ttk.Label(self, text=t('feedback.logs'), font=('', 9, 'bold')).grid(
             row=0, column=0, sticky='w', padx=12, pady=(8, 4))
 
         # 筛选控件
         filter_frame = ttk.Frame(self)
         filter_frame.grid(row=1, column=0, sticky='ew', padx=12, pady=2)
-        ttk.Label(filter_frame, text='级别:').pack(side='left')
+        ttk.Label(filter_frame, text=t('feedback.level')).pack(side='left')
         self._level_var = tk.StringVar(value='ALL')
         level_combo = ttk.Combobox(filter_frame, textvariable=self._level_var,
                                    values=['ALL', 'INFO', 'WARNING', 'ERROR'],
@@ -36,7 +38,7 @@ class TabFeedback(ttk.Frame):
         level_combo.pack(side='left', padx=4)
         level_combo.bind('<<ComboboxSelected>>', lambda e: self._populate())
 
-        ttk.Label(filter_frame, text='  日期:').pack(side='left')
+        ttk.Label(filter_frame, text=t('feedback.date')).pack(side='left')
         self._date_var = tk.StringVar()
         self._date_combo = ttk.Combobox(filter_frame, textvariable=self._date_var,
                                         state='readonly', width=12)
@@ -72,18 +74,18 @@ class TabFeedback(ttk.Frame):
         # 日志文件列表
         log_btn_frame = ttk.Frame(self)
         log_btn_frame.grid(row=4, column=0, sticky='ew', padx=12, pady=4)
-        ttk.Button(log_btn_frame, text='清空日志', command=self._clear_logs).pack(side='left')
-        ttk.Button(log_btn_frame, text='刷新', command=self._populate).pack(side='left', padx=4)
+        ttk.Button(log_btn_frame, text=t('feedback.clear'), command=self._clear_logs).pack(side='left')
+        ttk.Button(log_btn_frame, text=t('feedback.refresh'), command=self._populate).pack(side='left', padx=4)
 
         ttk.Separator(self, orient='horizontal').grid(row=5, column=0, sticky='ew', padx=12, pady=8)
 
         # 反馈包
-        ttk.Label(self, text='问题反馈', font=('', 9, 'bold')).grid(
+        ttk.Label(self, text=t('feedback.issue'), font=('', 9, 'bold')).grid(
             row=6, column=0, sticky='w', padx=12, pady=(4, 2))
-        ttk.Label(self, text='如遇问题，可导出反馈包（含运行日志和配置快照），\n发送给开发者以便排查。',
+        ttk.Label(self, text=t('feedback.issue_desc'),
                   wraplength=450, foreground='#666').grid(row=7, column=0, padx=24, pady=2, sticky='w')
 
-        ttk.Button(self, text='生成反馈包...', command=self._generate_feedback).grid(
+        ttk.Button(self, text=t('feedback.generate'), command=self._generate_feedback).grid(
             row=8, column=0, padx=12, pady=8, sticky='w')
 
         self._log_files: list[dict] = []
@@ -135,7 +137,6 @@ class TabFeedback(ttk.Frame):
         dates = []
         for log in self._log_files:
             if log['type'] == 'log':
-                # 从 usage_tracker_YYYYMMDD.log 提取日期
                 name = log['filename']
                 if '_' in name and name.endswith('.log'):
                     d = name.replace('usage_tracker_', '').replace('.log', '')
@@ -186,14 +187,14 @@ class TabFeedback(ttk.Frame):
                         self._text.insert('end', stripped + '\n', tag)
                         line_count += 1
             except Exception as e:
-                self._text.insert('end', f'读取失败: {e}\n', 'error')
+                self._text.insert('end', t('feedback.read_failed', error=e) + '\n', 'error')
         else:
-            self._text.insert('end', '暂无日志', 'info')
+            self._text.insert('end', t('feedback.no_logs'), 'info')
 
         # 追加崩溃日志
         for cl in crash_logs[:5]:
             self._text.insert('end', f'\n{"="*60}\n', 'crash')
-            self._text.insert('end', f'[崩溃日志] {cl["filename"]}\n', 'crash')
+            self._text.insert('end', f'[crash] {cl["filename"]}\n', 'crash')
             try:
                 with open(cl['path'], 'r', encoding='utf-8') as f:
                     for line in f:
@@ -206,7 +207,7 @@ class TabFeedback(ttk.Frame):
 
         total_size = sum(l['size'] for l in self._log_files)
         size_str = f'{total_size / 1024:.1f} KB' if total_size >= 1024 else f'{total_size} B'
-        self._count_label.configure(text=f'共 {len(self._log_files)} 个日志文件（{size_str}），当前显示 {line_count} 行')
+        self._count_label.configure(text=t('feedback.count', files=len(self._log_files), size=size_str, lines=line_count))
 
     @staticmethod
     def _get_line_tag(line: str) -> str:
@@ -220,14 +221,12 @@ class TabFeedback(ttk.Frame):
         return ''
 
     def _clear_logs(self):
-        if not messagebox.askyesno('确认', '确认清空所有运行日志和崩溃日志？\n此操作不可撤销。'):
+        if not messagebox.askyesno(t('dialog.confirm'), t('feedback.clear_confirm')):
             return
         log_dir, crash_dir = self._get_log_dirs()
-        cleared = 0
         for log in self._log_files:
             try:
                 Path(log['path']).unlink()
-                cleared += 1
             except Exception:
                 pass
         self._populate()
@@ -238,7 +237,7 @@ class TabFeedback(ttk.Frame):
             from ..src.version import VERSION
             import zipfile, os, json
         except ImportError:
-            messagebox.showerror('错误', '无法加载模块')
+            messagebox.showerror(t('dialog.error'), t('feedback.module_error'))
             return
 
         FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
@@ -249,7 +248,7 @@ class TabFeedback(ttk.Frame):
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 # 版本信息
                 zf.writestr('version.txt', f'UsageTracker {VERSION}\n'
-                            f'时间: {datetime.now().isoformat()}\n'
+                            f'Time: {datetime.now().isoformat()}\n'
                             f'Python: {__import__("sys").version}\n')
                 # 运行日志
                 if LOG_DIR.exists():
@@ -265,9 +264,9 @@ class TabFeedback(ttk.Frame):
                     cfg.pop('ignored_apps', None)
                     cfg.pop('custom_categories', None)
                     zf.writestr('config_snapshot.json', json.dumps(cfg, ensure_ascii=False, indent=2))
-            messagebox.showinfo('完成', f'反馈包已生成：\n{zip_path}')
+            messagebox.showinfo(t('dialog.done'), t('feedback.feedback_done', path=zip_path))
         except Exception as e:
-            messagebox.showerror('错误', f'生成反馈包失败: {e}')
+            messagebox.showerror(t('dialog.error'), t('feedback.feedback_failed', error=e))
 
     def apply(self):
         pass

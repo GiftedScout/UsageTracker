@@ -11,6 +11,8 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Dict, Optional
 
+from .i18n import t
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,14 +63,14 @@ class UsageNotifier:
 
     def _create_alert_message(self, category: str, duration_seconds: float, is_first: bool) -> str:
         duration_minutes = int(duration_seconds / 60)
-        cat_name = {'browser': '浏览器', 'game': '游戏'}.get(category, category)
+        cat_name = t(f'notifier.{category}', category)
         if is_first:
-            return f'您已使用{cat_name}超过1小时({duration_minutes}分钟)，请注意休息！'
+            return t('notifier.first_alert', cat=cat_name, minutes=duration_minutes)
         extra = duration_minutes - 60
-        return f'您已使用{cat_name}{duration_minutes}分钟(超过1小时{extra}分钟)，建议休息一下！'
+        return t('notifier.repeat_alert', cat=cat_name, minutes=duration_minutes, extra=extra)
 
     def _send_notification(self, category: str, message: str) -> None:
-        title = '使用时长提醒'
+        title = t('notifier.title')
         if not self._send_powershell_toast(title, message):
             logger.warning('Toast 通知发送失败')
 

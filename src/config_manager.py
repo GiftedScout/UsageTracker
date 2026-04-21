@@ -26,6 +26,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     'data_retention': DEFAULT_DATA_RETENTION,
     'check_interval': DEFAULT_CHECK_INTERVAL,
     'auto_start': DEFAULT_AUTO_START,
+    'auto_show_daily_report': True,
+    'language': 'zh-CN',
     'privacy_accepted': False,
     'browsers': [],
     'game_dirs': [],
@@ -36,6 +38,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 # 合法取值
 _VALID_THEMES = {'minimal', 'fairy_tale', 'business'}
 _VALID_RETENTIONS = {'unlimited', '1year', '3months', '1month'}
+_VALID_LANGUAGES = {'zh-CN', 'en'}
 
 
 class ConfigManager:
@@ -72,6 +75,8 @@ class ConfigManager:
                 elif key == 'data_retention' and val not in _VALID_RETENTIONS:
                     val = default
                 elif key == 'check_interval' and not isinstance(val, int | float):
+                    val = default
+                elif key == 'language' and val not in _VALID_LANGUAGES:
                     val = default
                 cfg[key] = val
         for key in raw:
@@ -123,6 +128,23 @@ class ConfigManager:
     @auto_start.setter
     def auto_start(self, value: bool) -> None:
         self._config['auto_start'] = bool(value)
+
+    @property
+    def auto_show_daily_report(self) -> bool:
+        return self._config.get('auto_show_daily_report', True)
+
+    @auto_show_daily_report.setter
+    def auto_show_daily_report(self, value: bool) -> None:
+        self._config['auto_show_daily_report'] = bool(value)
+
+    @property
+    def language(self) -> str:
+        return self._config.get('language', 'zh-CN')
+
+    @language.setter
+    def language(self, value: str) -> None:
+        if value in _VALID_LANGUAGES:
+            self._config['language'] = value
 
     @property
     def privacy_accepted(self) -> bool:

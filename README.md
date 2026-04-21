@@ -1,171 +1,168 @@
 <h1 align="center">🖥️ UsageTracker</h1>
 
-<p align="center">
-  <b>Windows 桌面应用使用时长追踪工具</b><br>
-  轻量静默驻守系统托盘，自动记录你的屏幕时间
+<p align="right">
+  <a href="README.zh-CN.md">中文</a> | English
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.1.0--beta-blue" alt="Version">
+  <b>Windows Desktop Application Usage Time Tracker</b><br>
+  Lightweight system tray app that silently records your screen time
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v0.1.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows_10%2F11-0078D6" alt="Platform">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-green" alt="License">
+  <img src="https://img.shields.io/badge/lang-English%20%7C%20%E4%B8%AD%E6%96%87-orange" alt="Languages">
 </p>
 
 ---
 
-### 🎯 如何使用 (How to Use)
+### 🎯 How to Use
 
-#### 📥 直接使用（推荐）
+#### 📥 Download & Install (Recommended)
 
-**不想折腾代码？直接下载安装包即可：**
+**Just want to use it? Download the installer:**
 
-🔗 **[👉 前往 Releases 页面下载安装包](../../releases)**
+🔗 **[👉 Go to Releases page](../../releases)**
 
-1. 下载最新的 `UsageTracker_Setup_x.x.x.exe`
-2. 双击运行安装向导，按提示勾选「开机自动启动」
-3. 安装完成后程序自动启动，最小化到右下角托盘
+1. Download the latest `UsageTracker_Setup_x.x.x.exe`
+2. Run the installer and follow the wizard (choose your language at startup)
+3. After installation, the app starts automatically and minimizes to the system tray
 
-> 💡 日常使用无需任何操作，程序会在后台默默记录。右键托盘图标可以查看今日日报、打开设置等。
+> 💡 No action needed day-to-day. The app runs silently in the background. Right-click the tray icon to view daily reports, open settings, etc.
 
-#### 📊 查看报告
+#### 📊 View Reports
 
-- **今日日报**：右键托盘图标 → 点击「今日日报」
-- **周报 / 月报**：右键托盘图标 → 点击「上周周报」或「上月月报」
-- 报告以精美 HTML 页面打开，包含时长饼图、应用排行榜、游戏时长对比等
-- 支持 🌸童话风 / 💼商务风 / 📝极简风 三套主题，在设置中切换
+- **Daily Report**: Right-click tray icon → "Yesterday's Report"
+- **Weekly / Monthly Report**: Right-click tray icon → "Last Week Report" or "Last Month Report"
+- Reports open as beautiful HTML pages with interactive charts, app rankings, game time comparisons, etc.
+- Supports 3 themes: 🌸 Fairy Tale / 💼 Business / 📝 Minimal — switch in Settings
 
-#### ⚙️ 常用设置
+#### ⚙️ Settings
 
-右键托盘图标 → 「设置」，可调整：
+Right-click tray icon → "Settings" to configure:
 
-| 功能 | 说明 |
+| Feature | Description |
 |:---|:---|
-| **通用** | 修改报告主题、调整追踪间隔、开关超时通知 |
-| **忽略名单** | 添加不想被统计的程序（如文件管理器、IDE 等） |
-| **超时提醒** | 自定义浏览器 / 游戏的使用时长上限 |
-| **浏览器管理** | 查看已识别的浏览器列表 |
-| **游戏管理** | 手动添加自定义游戏 |
-| **数据库管理** | 清理过期数据、导出数据库 |
-| **运行日志** | 查看程序运行日志、导出反馈包 |
+| **General** | Report theme, data retention, language, auto-start on boot |
+| **Ignore List** | Exclude apps from tracking (e.g., file managers, IDEs) |
+| **Categories** | Create custom categories and assign apps |
+| **Browsers** | View and manage detected browser list |
+| **Games** | Manage detected and custom game list |
+| **Database** | Clean expired data, export to CSV |
+| **Logs & Feedback** | View runtime logs, generate feedback packages |
 
-#### 🚫 在报告中忽略应用
+#### 🚫 Ignore Apps from Reports
 
-打开日报后，应用明细表每行右侧有一个 **✕** 按钮，点击即可忽略该应用，下次报告将不再显示。
-
----
-
-### 🌟 核心特色 (Features)
-
-- **🪟 自动追踪**：开机即运行，自动记录你使用了哪些应用、用了多久，无需手动操作
-- **🌐 浏览器分类**：Chrome、Edge、Firefox 等浏览器分别统计，精准掌握上网时间
-- **🎮 游戏识别**：自动识别 Steam 游戏、米哈游系列等，独立记录游戏时长
-- **📊 可视化报告**：日报 / 周报 / 月报，带交互图表，三套主题随心切换
-- **🔔 超时提醒**：浏览器或游戏使用过久时弹出系统通知，提醒你休息
-- **🛡️ 纯本地运行**：不联网、不上传、无广告，所有数据仅存于你的电脑
+In the daily report, each app row has a **✕** button on the right. Click it to ignore that app — it won't appear in future reports.
 
 ---
 
-### ⬇️ 以下内容仅供开发者阅读
+### 🌟 Features
 
-> ⚠️ **如果你只是想使用本软件，上方内容已经足够。以下为开发相关文档，非开发者无需继续阅读。**
+- **🪟 Automatic Tracking**: Runs on startup, records which apps you use and for how long — zero manual effort
+- **🌐 Browser Classification**: Chrome, Edge, Firefox, etc. tracked separately for accurate internet time
+- **🎮 Game Detection**: Auto-detects Steam games, HoYoverse titles, and more — independent game time tracking
+- **📊 Visual Reports**: Daily / Weekly / Monthly reports with interactive charts and 3 switchable themes
+- **🔔 Timeout Alerts**: System notifications when you've been using browsers or games for too long
+- **🛡️ Fully Local**: No network, no uploads, no ads — all data stays on your computer
+- **🌐 Bilingual**: Full Chinese and English support — choose at install time or switch in settings
 
 ---
 
-### 🛠️ 关于本地开发 (Development)
+### ⬇️ Developer Documentation
 
-本项目采用 **Python 3.11+** 开发，依赖极简（仅 3 个），克隆后三步即可启动：
+> ⚠️ **If you just want to use this app, everything above is sufficient. The content below is for developers only.**
+
+---
+
+### 🛠️ Development
+
+Built with **Python 3.11+**, minimal dependencies (only 3):
 
 ```bash
-# 1. 克隆仓库
+# 1. Clone the repo
 git clone https://github.com/GiftedScout/UsageTracker.git
 cd UsageTracker
 
-# 2. 创建虚拟环境并安装依赖
+# 2. Create venv and install dependencies
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3. 启动
+# 3. Run
 python -m src.main
 ```
 
-> 启动后程序最小化到系统托盘（右下角），右键托盘图标可打开日报或设置面板。
+> After launch, the app minimizes to the system tray (bottom-right). Right-click the tray icon to open reports or settings.
 
 ---
 
-### 📦 关于安装包构建 (Build Installer)
+### 📦 Build Installer
 
-项目采用 **PyInstaller + Inno Setup** 双阶段打包：
+Two-stage build with **PyInstaller + Inno Setup**:
 
 ```bash
-# 安装打包依赖
+# Install build dependencies
 pip install pyinstaller
 
-# 第一阶段：PyInstaller → 单目录 exe
+# Stage 1: PyInstaller → single-directory exe
 pyinstaller UsageTracker.spec
 
-# 第二阶段：Inno Setup → 安装包（需安装 Inno Setup）
+# Stage 2: Inno Setup → installer (requires Inno Setup)
 iscc installer.iss
 ```
 
 ---
 
-### 📁 项目文件结构 (Project Structure)
+### 📁 Project Structure
 
-| 文件 / 文件夹 | 说明 |
+| File / Folder | Description |
 |:---|:---|
-| `src/` | 核心业务模块（追踪引擎、数据存储、报告生成、通知系统等） |
-| `ui/` | 图形设置界面（7 个功能标签页） |
-| `assets/` | 静态资源（应用图标、Chart.js、报告主题 CSS） |
-| `docs/` | 设计文档（详细设计报告 + v0.2.0 路线图） |
-| `installer.iss` | Inno Setup 安装脚本 |
-| `requirements.txt` | Python 依赖清单 |
-| `LICENSE` | MIT 开源许可证 |
+| `src/` | Core modules (tracking engine, data store, report generator, notifications, i18n) |
+| `ui/` | Settings GUI (7 tab pages) |
+| `locales/` | Translation files (zh-CN.json, en.json) |
+| `assets/` | Static resources (app icon, Chart.js, report theme CSS) |
+| `docs/` | Design documents |
+| `installer.iss` | Inno Setup installer script |
+| `requirements.txt` | Python dependencies |
+| `LICENSE` | GPL-3.0 license |
 
 ---
 
-### 🛠️ 技术栈 (Tech Stack)
+### 🛠️ Tech Stack
 
-| 层级 | 技术选型 |
+| Layer | Technology |
 |:---|:---|
-| 语言 | Python 3.11+ |
+| Language | Python 3.11+ |
 | GUI | tkinter + pystray + Pillow |
-| 数据库 | SQLite（标准库） |
-| 图表 | Chart.js（内嵌至报告） |
-| 打包 | PyInstaller → Inno Setup |
-| 依赖 | 仅 psutil + pystray + Pillow，极致轻量 |
+| Database | SQLite (stdlib) |
+| Charts | Chart.js (embedded in reports) |
+| i18n | Custom JSON-based lightweight module |
+| Build | PyInstaller → Inno Setup |
+| Dependencies | Only psutil + pystray + Pillow — ultra lightweight |
 
 ---
 
-### 🗺️ 版本路线图 (Roadmap)
+### 🗺️ Roadmap
 
-详见 [docs/roadmap-v0.2.0.md](docs/roadmap-v0.2.0.md)
-
-- [ ] **v0.2.0** — 事件驱动追踪（替代轮询）、自动更新机制、代码签名
-- [ ] **v0.3.0** — 数据导出（CSV / PDF）、多语言支持、周报自动生成
-- [ ] **v1.0.0** — 插件系统、跨平台适配（macOS / Linux）
+- [x] **v0.1.0** — Bug fixes, bilingual support (zh-CN / en)
+- [ ] **v0.2.0** — Event-driven tracking, auto-update, code signing
+- [ ] **v1.0.0** — Plugin system, cross-platform (macOS / Linux)
 
 ---
 
-### ✉️ 关于开发者 (About Developer)
+### 🔗 Links
 
-**UsageTracker** 由 **chaos** 独立设计与开发，首发于 2026 年春季。
-
-> 本项目完全出于个人需求驱动——我想知道自己每天的时间究竟去了哪里。
-
----
-
-### 🔗 相关链接 (Links)
-
-| 类型 | 链接 |
+| Type | Link |
 |:---|:---|
-| GitHub 仓库 | https://github.com/GiftedScout/UsageTracker |
-| 许可证 | [MIT](LICENSE) |
-| v0.2.0 路线图 | [docs/roadmap-v0.2.0.md](docs/roadmap-v0.2.0.md) |
-| 详细设计报告 | [docs/design-report-v0.1.0-beta.md](docs/design-report-v0.1.0-beta.md) |
+| GitHub Repository | https://github.com/GiftedScout/UsageTracker |
+| License | [GPL-3.0](LICENSE) |
+| Design Report | [docs/design-report-v0.1.0-beta.md](docs/design-report-v0.1.0-beta.md) |
 
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by chaos · Licensed under MIT</sub>
+  <sub>Built with ❤️ by chaos · Licensed under GPL-3.0</sub>
 </p>
