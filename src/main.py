@@ -236,39 +236,58 @@ def _run_app():
         def _run():
             try:
                 import tkinter as tk
-                settings_root = tk.Tk()
-                settings_root.withdraw()
                 from ui.settings_window import SettingsWindow
+                # 用独立 Tk 根（设为实际可见的隐形小窗，作为 Toplevel 的 parent）
+                settings_root = tk.Tk()
+                settings_root.withdraw()          # 隐藏根窗口本体
+                settings_root.wm_attributes('-alpha', 0)  # 完全透明
+                settings_root.wm_attributes('-topmost', True)
+
                 sw = SettingsWindow(
                     settings_root, config_manager=config,
                     startup_manager=startup, app_classifier=classifier,
                     data_store=data_store, crash_handler=crash_handler)
-                # 窗口关闭时销毁 Tk 根，退出 mainloop
-                orig_cancel = sw._on_cancel
+
+                # 窗口关闭时销毁整个 Tk 根，退出 mainloop（必须用 after 确保在主循环内执行）
+                def _destroy():
+                    try:
+                        settings_root.destroy()
+                    except Exception:
+                        pass
+
                 orig_ok = sw._on_ok
+                orig_cancel = sw._on_cancel
+
                 def _on_close_ok():
                     orig_ok()
-                    settings_root.destroy()
+                    settings_root.after(0, _destroy)
+
                 def _on_close_cancel():
                     orig_cancel()
-                    settings_root.destroy()
+                    settings_root.after(0, _destroy)
+
                 sw._window.protocol('WM_DELETE_WINDOW', _on_close_cancel)
                 sw._on_ok = _on_close_ok
                 sw._on_cancel = _on_close_cancel
+
                 # 居中显示
-                settings_root.update_idletasks()
                 sw._window.update_idletasks()
                 w, h = 700, 500
                 x = (sw._window.winfo_screenwidth() - w) // 2
                 y = (sw._window.winfo_screenheight() - h) // 2
                 sw._window.geometry(f'{w}x{h}+{x}+{y}')
                 sw._window.deiconify()
+                sw._window.lift()
                 sw._window.focus_force()
                 settings_root.mainloop()
+            except Exception as exc:
+                logger.error('设置窗口异常: %s', exc, exc_info=True)
             finally:
                 _settings_lock.release()
-        t = threading.Thread(target=_run, daemon=True, name='settings-window')
-        t.start()
+
+        # 注意：局部变量名改为 _thr，避免覆盖 i18n 的 t() 函数
+        _thr = threading.Thread(target=_run, daemon=True, name='settings-window')
+        _thr.start()
 
     # 创建托盘
     icon = _create_icon()
