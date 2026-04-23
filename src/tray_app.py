@@ -52,13 +52,16 @@ class TrayApp:
         )
 
     def _open_daily(self, icon=None, item=None) -> None:
-        self._generate_and_open('daily')
+        threading.Thread(target=self._generate_and_open, args=('daily',),
+                         daemon=True, name='open-daily').start()
 
     def _open_weekly(self, icon=None, item=None) -> None:
-        self._generate_and_open('weekly')
+        threading.Thread(target=self._generate_and_open, args=('weekly',),
+                         daemon=True, name='open-weekly').start()
 
     def _open_monthly(self, icon=None, item=None) -> None:
-        self._generate_and_open('monthly')
+        threading.Thread(target=self._generate_and_open, args=('monthly',),
+                         daemon=True, name='open-monthly').start()
 
     def _get_report_date(self) -> str:
         """确定日报日期：优先昨天，若昨天无数据则回溯到最近有数据的日期"""
@@ -152,23 +155,17 @@ class TrayApp:
         self.icon.run()
 
     def _notify_no_data(self, message: str) -> None:
-        """无报告数据时发送 Toast 通知"""
-        import subprocess
-        app_id = r'{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
-        ps = (
-            "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null\n"
-            "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null\n"
-            "$xml = New-Object Windows.Data.Xml.Dom.XmlDocument\n"
-            f"$xml.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>UsageTracker</text><text>{message}</text></binding></visual></toast>')\n"
-            "$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)\n"
-            f"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{app_id}').Show($toast)\n"
-        )
+        """无报告数据时弹窗提示（兜底用 tkinter，比 Toast 可靠）"""
         try:
-            subprocess.run(
-                ['powershell', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', ps],
-                capture_output=True, timeout=8)
+            import tkinter as tk
+            from tkinter import messagebox
+            _root = tk.Tk()
+            _root.withdraw()
+            _root.wm_attributes('-topmost', True)
+            messagebox.showinfo('UsageTracker', message, parent=_root)
+            _root.destroy()
         except Exception as e:
-            logger.debug('无数据提示 Toast 失败: %s', e)
+            logger.debug('无数据提示失败: %s', e)
 
     def stop(self) -> None:
         self._stop_event.set()
