@@ -1,8 +1,8 @@
 ; UsageTracker Inno Setup 安装脚本
-; 版本: 0.1.0
+; 版本: 0.1.1
 
 #define MyAppName "UsageTracker"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppPublisher "chaos"
 #define MyAppURL ""
 #define MyAppExeName "UsageTracker.exe"
