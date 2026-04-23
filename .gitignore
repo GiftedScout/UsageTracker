@@ -21,6 +21,7 @@ test_output/
 *.tmp
 _verify.py
 test_*.html
+test_*.py
 
 # IDE
 .vscode/
