@@ -136,8 +136,8 @@ class BridgeHandler:
         try:
             self._http_server = HTTPServer(('127.0.0.1', _BRIDGE_PORT), _Handler)
             import threading
-            t = threading.Thread(target=self._http_server.serve_forever, daemon=True, name='bridge-http')
-            t.start()
+            _thr = threading.Thread(target=self._http_server.serve_forever, daemon=True, name='bridge-http')
+            _thr.start()
             logger.info('Bridge HTTP 服务已启动 (127.0.0.1:%d)', _BRIDGE_PORT)
         except OSError as e:
             logger.warning('Bridge HTTP 启动失败（端口被占用，跳过）: %s', e)

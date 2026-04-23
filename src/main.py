@@ -323,13 +323,9 @@ def _run_app():
         tracker.start()
         logger.info('UsageTracker 已启动')
 
-        # 开机自动弹出昨日报告（延迟 12 秒，等系统和托盘均稳定）
+        # 开机自动弹出昨日报告（在托盘就绪后触发，不再用固定延迟）
         if config.auto_show_daily_report:
-            def _auto_open_report():
-                tracker._stop_event.wait(12)
-                if not tracker._stop_event.is_set():
-                    tray_app_obj._open_daily()
-            threading.Thread(target=_auto_open_report, daemon=True, name='auto-report').start()
+            tray_app_obj._auto_open_daily = True
 
         # 运行托盘（阻塞）
         tray_app_obj.run()

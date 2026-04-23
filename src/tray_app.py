@@ -33,6 +33,7 @@ class TrayApp:
         self._on_quit = on_quit
         self._stop_event = threading.Event()
         self._tooltip_thread: threading.Thread | None = None
+        self._auto_open_daily = False  # 托盘就绪后自动弹出昨日报告
 
         self.icon = pystray.Icon(
             name=APP_NAME,
@@ -152,6 +153,13 @@ class TrayApp:
         self._stop_event.clear()
         self._tooltip_thread = threading.Thread(target=self._update_tooltip_loop, daemon=True)
         self._tooltip_thread.start()
+        # 自动弹日报：等托盘就绪（icon.run 启动后 1 秒桌面已渲染）
+        if self._auto_open_daily:
+            def _auto_report():
+                self._stop_event.wait(1)
+                if not self._stop_event.is_set():
+                    self._open_daily()
+            threading.Thread(target=_auto_report, daemon=True, name='auto-report').start()
         self.icon.run()
 
     def _notify_no_data(self, message: str) -> None:
