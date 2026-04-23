@@ -94,7 +94,7 @@ class TabFeedback(ttk.Frame):
     def _get_log_dirs(self) -> tuple[Path, Path]:
         """获取日志目录和崩溃日志目录"""
         try:
-            from ..src.constants import LOG_DIR, CRASH_LOG_DIR
+            from src.constants import LOG_DIR, CRASH_LOG_DIR
             return LOG_DIR, CRASH_LOG_DIR
         except Exception:
             return Path(''), Path('')
@@ -233,8 +233,8 @@ class TabFeedback(ttk.Frame):
 
     def _generate_feedback(self):
         try:
-            from ..src.constants import CRASH_LOG_DIR, CONFIG_PATH, LOG_DIR, FEEDBACK_DIR
-            from ..src.version import VERSION
+            from src.constants import CRASH_LOG_DIR, CONFIG_PATH, LOG_DIR, FEEDBACK_DIR
+            from src.version import VERSION
             import zipfile, os, json
         except ImportError:
             messagebox.showerror(t('dialog.error'), t('feedback.module_error'))
