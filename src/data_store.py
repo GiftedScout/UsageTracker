@@ -26,6 +26,7 @@ class DailyUsage:
     category: str
     duration_seconds: float
     session_count: int
+    exe_path: str = ''
 
 
 @dataclass
@@ -161,11 +162,11 @@ class DataStore:
             query_date = date.today().isoformat()
         with self._get_conn() as conn:
             rows = conn.execute(
-                'SELECT date, app_name, category, duration_seconds, session_count '
+                'SELECT date, app_name, category, duration_seconds, session_count, COALESCE(exe_path, "") '
                 'FROM usage_records WHERE date = ? ORDER BY duration_seconds DESC',
                 (query_date,)).fetchall()
         return [DailyUsage(date=r[0], app_name=r[1], category=r[2],
-                           duration_seconds=r[3], session_count=r[4]) for r in rows]
+                           duration_seconds=r[3], session_count=r[4], exe_path=r[5]) for r in rows]
 
     def get_daily_report(self, query_date: str | None = None) -> DailyReport | None:
         if query_date is None:

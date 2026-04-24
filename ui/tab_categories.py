@@ -53,12 +53,12 @@ class TabCategories(ttk.Frame):
 
         ttk.Label(self, text=t('categories.app_hint'), foreground='#888',
                   wraplength=500, justify='left').grid(
-            row=4.5, column=0, sticky='w', padx=24, pady=(0, 2))
+            row=5, column=0, sticky='w', padx=24, pady=(0, 2))
 
         # 主区域: 上面是分类列表，下面是选中分类的程序列表
         paned = ttk.PanedWindow(self, orient='vertical')
-        paned.grid(row=5, column=0, sticky='nsew', padx=12, pady=4)
-        self.rowconfigure(5, weight=1)
+        paned.grid(row=6, column=0, sticky='nsew', padx=12, pady=4)
+        self.rowconfigure(6, weight=1)
 
         # 分类列表
         cat_frame = ttk.LabelFrame(paned, text=t('categories.cat_list'))
