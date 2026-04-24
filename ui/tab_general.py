@@ -21,6 +21,14 @@ class TabGeneral(ttk.Frame):
         super().__init__(parent)
         self._config = config_manager
         self._startup = startup_manager
+        # 测试运行模式检测：exe 在 dist\ 目录或非冻结环境，禁止写入开机自启
+        import sys as _sys
+        from pathlib import Path as _Path
+        if getattr(_sys, 'frozen', False):
+            _exe = _Path(_sys.executable)
+            self._is_test_run = ('dist' in _exe.parent.parts)
+        else:
+            self._is_test_run = True
         self._build()
 
     def _build(self):
@@ -59,9 +67,14 @@ class TabGeneral(ttk.Frame):
         lang_combo.bind('<<ComboboxSelected>>', self._on_language_change)
         row += 1
 
-        # 开机自启
-        ttk.Checkbutton(self, text=t('general.auto_start'), variable=self._auto_start_var
-                        ).grid(row=row, column=0, columnspan=2, **pad)
+        # 开机自启（测试模式下禁用）
+        _startup_label = t('general.auto_start')
+        if self._is_test_run:
+            _startup_label += '  [测试模式不可用]'
+        _startup_cb = ttk.Checkbutton(self, text=_startup_label, variable=self._auto_start_var)
+        _startup_cb.grid(row=row, column=0, columnspan=2, **pad)
+        if self._is_test_run:
+            _startup_cb.state(['disabled'])
         row += 1
 
         # 开机弹昨日报告
@@ -95,6 +108,8 @@ class TabGeneral(ttk.Frame):
         self._config.auto_start = self._auto_start_var.get()
         self._config.auto_show_daily_report = self._auto_report_var.get()
         self._config.save()
+        if self._is_test_run:
+            return  # 测试模式：跳过开机自启写入，保护 CLI 环境
         if self._auto_start_var.get():
             self._startup.enable_startup()
         else:

@@ -150,11 +150,19 @@ def _run_app():
     if getattr(_sys, 'frozen', False):
         # PyInstaller 打包后：_MEIPASS 上层就是 exe
         _exe_path = _sys.executable
+        # 安全检测：若运行在 dist\ 目录下（非正式安装路径），禁用自启写入
+        _install_dir = Path(_exe_path).parent
+        _is_test_run = ('dist' in _install_dir.parts or
+                        str(_install_dir).lower().startswith(
+                            str(Path(__file__).resolve().parent.parent).lower()))
     else:
         # 开发模式：指向 src/main.py 的上层目录中的启动脚本（仅用于测试）
         _exe_path = str(Path(__file__).resolve().parent.parent / 'UsageTracker.exe')
+        _is_test_run = True  # 开发模式同样禁用自启
     startup = StartupManager(exe_path=_exe_path)
-    if config.auto_start and not startup.is_startup_enabled():
+    if _is_test_run:
+        logger.info('测试运行模式：跳过开机自启写入（exe 不在正式安装目录）')
+    elif config.auto_start and not startup.is_startup_enabled():
         startup.enable_startup()
 
     # Bridge 通信（HTTP + 文件轮询）
