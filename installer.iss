@@ -1,8 +1,8 @@
 ; UsageTracker Inno Setup 安装脚本
-; 版本: 0.1.1
+; 版本: 0.1.2
 
 #define MyAppName "UsageTracker"
-#define MyAppVersion "0.1.1"
+#define MyAppVersion "0.1.2"
 #define MyAppPublisher "chaos"
 #define MyAppURL ""
 #define MyAppExeName "UsageTracker.exe"
@@ -65,12 +65,15 @@ Name: "desktopicon"; Description: "{cm:DesktopIcon}"; Flags: unchecked
 Name: "startupicon"; Description: "{cm:StartupIcon}"; Flags: checkedonce
 
 [Files]
-; 程序文件：忽略版本号（允许覆盖升级）
+; 程序文件：忽略版本号（允许覆盖升级），用户数据目录排除不覆盖
 Source: "dist\UsageTracker\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "config\*,data\*,reports\*,logs\*,bridge\*,feedback\*"
-; 确保子目录结构存在（空目录也需要）
-Source: "dist\UsageTracker\config\.gitkeep"; DestDir: "{app}\config"; Flags: ignoreversion onlyifdoesntexist
-Source: "dist\UsageTracker\data\.gitkeep"; DestDir: "{app}\data"; Flags: ignoreversion onlyifdoesntexist
-Source: "dist\UsageTracker\reports\.gitkeep"; DestDir: "{app}\reports"; Flags: ignoreversion onlyifdoesntexist
+
+[Dirs]
+; 确保数据子目录结构存在
+Name: "{app}\config"
+Name: "{app}\data"
+Name: "{app}\reports"
+Name: "{app}\logs"
 
 [Icons]
 ; 开始菜单快捷方式
