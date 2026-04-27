@@ -5,6 +5,7 @@ from tkinter import ttk
 import logging
 
 from src.i18n import t
+from ui.process_picker import ProcessPicker
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,12 @@ class TabIgnore(ttk.Frame):
 
         btn_frame = ttk.Frame(self)
         btn_frame.grid(row=3, column=0, sticky='ew', padx=12, pady=4)
-        ttk.Button(btn_frame, text=t('ignore.remove_selected'), command=self._remove_selected).pack(side='left')
-        ttk.Button(btn_frame, text=t('ignore.clear_all'), command=self._clear_all).pack(side='left', padx=4)
+        ttk.Button(btn_frame, text=t('process_picker.from_process'),
+                   command=self._add_from_process).pack(side='left')
+        ttk.Button(btn_frame, text=t('ignore.remove_selected'),
+                   command=self._remove_selected).pack(side='left', padx=4)
+        ttk.Button(btn_frame, text=t('ignore.clear_all'),
+                   command=self._clear_all).pack(side='left', padx=4)
 
         self._populate()
 
@@ -77,6 +82,16 @@ class TabIgnore(ttk.Frame):
         self._config.set('ignored_apps', [])
         self._config.save()
         self._populate()
+
+    def _add_from_process(self):
+        """从当前运行进程中选择要忽略的应用"""
+        picker = ProcessPicker(self)
+        self.wait_window(picker)
+        if picker.result:
+            exe_path = picker.result['exe']
+            app_name = picker.result['name']
+            self._config.add_ignored_app(exe_path, app_name)
+            self._populate()
 
     def apply(self):
         pass

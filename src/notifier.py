@@ -63,7 +63,7 @@ class UsageNotifier:
 
     def _create_alert_message(self, category: str, duration_seconds: float, is_first: bool) -> str:
         duration_minutes = int(duration_seconds / 60)
-        cat_name = t(f'notifier.{category}', category)
+        cat_name = t(f'notifier.{category}')
         if is_first:
             return t('notifier.first_alert', cat=cat_name, minutes=duration_minutes)
         extra = duration_minutes - 60
@@ -80,14 +80,14 @@ class UsageNotifier:
                 .replace('>', '&gt;').replace('"', '&quot;').replace("'", '&apos;'))
 
     def _send_powershell_toast(self, title: str, message: str) -> bool:
-        t = self._xml_escape(title)
-        m = self._xml_escape(message)
+        _title = self._xml_escape(title)
+        _msg = self._xml_escape(message)
         app_id = r'{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
         ps_script = (
             "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null\n"
             "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null\n"
             "$xml = New-Object Windows.Data.Xml.Dom.XmlDocument\n"
-            f"$xml.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>{t}</text><text>{m}</text></binding></visual></toast>')\n"
+            f"$xml.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>{_title}</text><text>{_msg}</text></binding></visual></toast>')\n"
             "$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)\n"
             f"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{app_id}').Show($toast)\n"
         )

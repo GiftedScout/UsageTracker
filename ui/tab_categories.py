@@ -5,6 +5,7 @@ from tkinter import ttk, filedialog, messagebox
 import logging
 
 from src.i18n import t
+from ui.process_picker import ProcessPicker
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,8 @@ class TabCategories(ttk.Frame):
             side='left', fill='y', padx=8, pady=2)
         ttk.Button(btn_frame, text=t('categories.add_app'),
                    command=self._add_app_to_selected).pack(side='left')
+        ttk.Button(btn_frame, text=t('process_picker.from_process'),
+                   command=self._add_app_from_process).pack(side='left', padx=4)
         ttk.Button(btn_frame, text=t('categories.remove_app'),
                    command=self._remove_app_from_selected).pack(side='left', padx=4)
 
@@ -96,7 +99,8 @@ class TabCategories(ttk.Frame):
                                       len(apps)))
 
     def _on_cat_select(self, event=None):
-        self._app_tree.delete(0, 'end')
+        for item in self._app_tree.get_children():
+            self._app_tree.delete(item)
         sel = self._tree.selection()
         if not sel:
             return
@@ -127,7 +131,8 @@ class TabCategories(ttk.Frame):
         for item_id in sel:
             self._config.remove_custom_category(item_id)
         self._populate()
-        self._app_tree.delete(0, 'end')
+        for item in self._app_tree.get_children():
+            self._app_tree.delete(item)
 
     def _add_app_to_selected(self):
         cat_id = self._get_selected_cat_id()
@@ -144,6 +149,21 @@ class TabCategories(ttk.Frame):
             self._on_cat_select()
         else:
             messagebox.showinfo(t('dialog.hint'), t('categories.already_in'))
+
+    def _add_app_from_process(self):
+        cat_id = self._get_selected_cat_id()
+        if not cat_id:
+            messagebox.showinfo(t('dialog.hint'), t('categories.select_hint'))
+            return
+        picker = ProcessPicker(self)
+        self.wait_window(picker)
+        if picker.result:
+            path = picker.result['exe']
+            if self._config.add_app_to_category(cat_id, path):
+                self._populate()
+                self._on_cat_select()
+            else:
+                messagebox.showinfo(t('dialog.hint'), t('categories.already_in'))
 
     def _remove_app_from_selected(self):
         cat_id = self._get_selected_cat_id()

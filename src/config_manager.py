@@ -138,6 +138,15 @@ class ConfigManager:
         self._config['auto_show_daily_report'] = bool(value)
 
     @property
+    def last_report_shown_date(self) -> str:
+        """最后一次自动弹报告的日期（ISO 格式，如 2026-04-27）"""
+        return self._config.get('last_report_shown_date', '')
+
+    @last_report_shown_date.setter
+    def last_report_shown_date(self, value: str) -> None:
+        self._config['last_report_shown_date'] = value
+
+    @property
     def language(self) -> str:
         return self._config.get('language', 'zh-CN')
 
@@ -179,8 +188,9 @@ class ConfigManager:
     # ---- 忽略名单 ----
 
     def add_ignored_app(self, exe_path: str, app_name: str) -> bool:
+        exe_lower = exe_path.lower()
         for item in self._config['ignored_apps']:
-            if item.get('exe_path') == exe_path:
+            if item.get('exe_path', '').lower() == exe_lower:
                 return False
         import datetime
         self._config['ignored_apps'].append({
@@ -192,10 +202,11 @@ class ConfigManager:
         return True
 
     def remove_ignored_app(self, exe_path: str) -> bool:
+        exe_lower = exe_path.lower()
         before = len(self._config['ignored_apps'])
         self._config['ignored_apps'] = [
             item for item in self._config['ignored_apps']
-            if item.get('exe_path') != exe_path
+            if item.get('exe_path', '').lower() != exe_lower
         ]
         if len(self._config['ignored_apps']) < before:
             self.save()
@@ -203,8 +214,9 @@ class ConfigManager:
         return False
 
     def is_ignored(self, exe_path: str) -> bool:
+        exe_lower = exe_path.lower()
         return any(
-            item.get('exe_path') == exe_path
+            item.get('exe_path', '').lower() == exe_lower
             for item in self._config['ignored_apps']
         )
 

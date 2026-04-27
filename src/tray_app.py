@@ -13,8 +13,7 @@ from typing import Callable
 from PIL import Image
 import pystray
 
-from .version import VERSION, APP_NAME
-from .constants import TOOLTIP_UPDATE_INTERVAL
+from .version import VERSION, APP_NAME, RELEASE_NOTES
 from .i18n import t
 
 logger = logging.getLogger(__name__)
@@ -32,7 +31,6 @@ class TrayApp:
         self._on_settings = on_settings
         self._on_quit = on_quit
         self._stop_event = threading.Event()
-        self._tooltip_thread: threading.Thread | None = None
         self._auto_open_daily = False  # 托盘就绪后自动弹出昨日报告
 
         self.icon = pystray.Icon(
@@ -45,7 +43,7 @@ class TrayApp:
                 pystray.MenuItem(t('tray.last_month_report'), self._open_monthly),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(t('tray.settings'), self._open_settings, default=True),
-                pystray.MenuItem(f'{t("tray.about")} ({VERSION})', self._show_about, enabled=False),
+                pystray.MenuItem(f'{t("tray.about")} ({VERSION})', self._show_about),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(t('tray.exit'), self._quit),
             ),
@@ -53,14 +51,17 @@ class TrayApp:
         )
 
     def _open_daily(self, icon=None, item=None) -> None:
+        self._update_tooltip()
         threading.Thread(target=self._generate_and_open, args=('daily',),
                          daemon=True, name='open-daily').start()
 
     def _open_weekly(self, icon=None, item=None) -> None:
+        self._update_tooltip()
         threading.Thread(target=self._generate_and_open, args=('weekly',),
                          daemon=True, name='open-weekly').start()
 
     def _open_monthly(self, icon=None, item=None) -> None:
+        self._update_tooltip()
         threading.Thread(target=self._generate_and_open, args=('monthly',),
                          daemon=True, name='open-monthly').start()
 
@@ -122,7 +123,49 @@ class TrayApp:
             self._on_settings()
 
     def _show_about(self, icon=None, item=None) -> None:
-        pass  # enabled=False，不可点击
+        """弹出关于窗口，显示当前版本更新日志"""
+        def _run():
+            import tkinter as tk
+            from tkinter import ttk
+            import webbrowser
+            root = tk.Tk()
+            root.title(f'{t("tray.about")} {APP_NAME}')
+            root.resizable(False, False)
+            root.wm_attributes('-topmost', True)
+
+            # 标题
+            ttk.Label(root, text=f'{APP_NAME}  v{VERSION}',
+                      font=('', 14, 'bold')).pack(padx=20, pady=(16, 8))
+
+            # 更新日志
+            frame = ttk.Frame(root)
+            frame.pack(fill='both', expand=True, padx=20, pady=4)
+            txt = tk.Text(frame, width=52, height=14, wrap='word',
+                          relief='flat', bg=root.cget('bg'), state='normal',
+                          font=('', 9))
+            txt.insert('1.0', RELEASE_NOTES)
+            txt.config(state='disabled')
+            txt.pack(fill='both', expand=True)
+
+            # 按钮区
+            btn_frame = ttk.Frame(root)
+            btn_frame.pack(pady=(4, 16))
+            ttk.Button(btn_frame, text='查看 GitHub 主页',
+                       command=lambda: webbrowser.open(
+                           'https://github.com/GiftedScout/UsageTracker')
+                       ).pack(side='left', padx=8)
+            ttk.Button(btn_frame, text='关闭',
+                       command=root.destroy).pack(side='left', padx=8)
+
+            # 居中
+            root.update_idletasks()
+            w, h = root.winfo_reqwidth(), root.winfo_reqheight()
+            x = (root.winfo_screenwidth() - w) // 2
+            y = (root.winfo_screenheight() - h) // 2
+            root.geometry(f'{w}x{h}+{x}+{y}')
+            root.mainloop()
+
+        threading.Thread(target=_run, daemon=True, name='about-window').start()
 
     def _quit(self, icon=None, item=None) -> None:
         self._stop_event.set()
@@ -130,29 +173,27 @@ class TrayApp:
         if self._on_quit:
             self._on_quit()
 
-    def _update_tooltip_loop(self) -> None:
-        """定时更新托盘悬浮提示"""
-        while not self._stop_event.is_set():
-            try:
-                if self._data_store:
-                    report = self._data_store.get_daily_report(
-                        (date.today() - timedelta(days=1)).isoformat())
-                    if report:
-                        from .data_store import DataStore
-                        b = DataStore.format_duration(report.browser_seconds)
-                        g = DataStore.format_duration(report.game_seconds)
-                        self.icon.title = f'UsageTracker | {t("tray.tooltip_yesterday", browser=b, game=g)}'
-                    else:
-                        self.icon.title = f'{APP_NAME} | {t("tray.tooltip_no_data")}'
-            except Exception as e:
-                logger.debug('更新 tooltip 失败: %s', e)
-            self._stop_event.wait(TOOLTIP_UPDATE_INTERVAL)
+    def _update_tooltip(self) -> None:
+        """更新托盘悬浮提示（必须在主线程调用，否则 Shell_NotifyIcon 会崩溃）"""
+        try:
+            if self._data_store:
+                report = self._data_store.get_daily_report(
+                    (date.today() - timedelta(days=1)).isoformat())
+                if report:
+                    from .data_store import DataStore
+                    b = DataStore.format_duration(report.browser_seconds)
+                    g = DataStore.format_duration(report.game_seconds)
+                    self.icon.title = f'UsageTracker | {t("tray.tooltip_yesterday", browser=b, game=g)}'
+                else:
+                    self.icon.title = f'{APP_NAME} | {t("tray.tooltip_no_data")}'
+        except Exception as e:
+            logger.debug('更新 tooltip 失败: %s', e)
 
     def run(self) -> None:
         """启动托盘图标（阻塞）"""
         self._stop_event.clear()
-        self._tooltip_thread = threading.Thread(target=self._update_tooltip_loop, daemon=True)
-        self._tooltip_thread.start()
+        # 首次更新 tooltip（在主线程，安全）
+        self._update_tooltip()
         # 自动弹日报：等托盘就绪（icon.run 启动后 1 秒桌面已渲染）
         if self._auto_open_daily:
             def _auto_report():

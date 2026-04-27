@@ -69,7 +69,7 @@
   "categories.executable": "可执行文件",
   "categories.all_files": "所有文件",
   "categories.already_in": "该程序已在此分类中",
-  "categories.app_hint": "提示：添加程序时会自动获取完整路径，无需手动输入。",
+  "categories.app_hint": "提示：可浏览选择 .exe 文件，也可点击\u201c从进程选择\u201d从当前运行进程中添加。",
 
   "browsers.detected": "已识别的浏览器",
   "browsers.process_name": "进程名:",
@@ -87,7 +87,7 @@
   "games.remove_selected": "移除选中",
   "games.count": "Steam 游戏: {steam} 个  |  非 Steam 游戏: {extra} 个",
   "games.exists": "{exe} 已在游戏列表中",
-  "games.exe_hint": "提示：exe 名只需填写进程文件名（如 game.exe），不需要完整路径。",
+  "games.exe_hint": "提示：可手动输入 exe 文件名（如 game.exe），也可点击\u201c从进程选择\u201d自动填入。",
 
   "ignore.ignored_apps": "已忽略的应用",
   "ignore.app_name": "应用名",
@@ -111,6 +111,7 @@
   "database.cleanup_done": "已清理 {count} 条过期记录。",
   "database.export_done": "已导出 {count} 条记录到：\n{path}",
   "database.export_failed": "导出失败",
+  "database.date_format_error": "日期格式不正确，请使用 YYYY-MM-DD 格式（如 2026-04-27）。",
 
   "feedback.logs": "运行日志",
   "feedback.level": "级别:",
@@ -182,6 +183,17 @@
   "notifier.game": "游戏",
   "notifier.first_alert": "您已使用{cat}超过1小时({minutes}分钟)，请注意休息！",
   "notifier.repeat_alert": "您已使用{cat}{minutes}分钟(超过1小时{extra}分钟)，建议休息一下！",
+
+  "process_picker.title": "从运行进程中选择",
+  "process_picker.search": "搜索:",
+  "process_picker.col_name": "进程名",
+  "process_picker.col_pid": "PID",
+  "process_picker.col_exe": "路径",
+  "process_picker.loading": "正在加载进程列表...",
+  "process_picker.count": "共 {count} 个进程",
+  "process_picker.refresh": "刷新",
+  "process_picker.psutil_missing": "缺少 psutil 依赖，无法获取进程列表",
+  "process_picker.from_process": "从进程选择",
 
   "dialog.hint": "提示",
   "dialog.confirm": "确认",

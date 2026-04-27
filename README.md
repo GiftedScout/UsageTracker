@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.1.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.1.2-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows_10%2F11-0078D6" alt="Platform">
   <img src="https://img.shields.io/badge/license-GPL--3.0-green" alt="License">
   <img src="https://img.shields.io/badge/lang-English%20%7C%20%E4%B8%AD%E6%96%87-orange" alt="Languages">
@@ -45,13 +45,13 @@ Right-click tray icon → "Settings" to configure:
 
 | Feature | Description |
 |:---|:---|
-| **General** | Report theme, data retention, language, auto-start on boot |
-| **Ignore List** | Exclude apps from tracking (e.g., file managers, IDEs) |
-| **Categories** | Create custom categories and assign apps |
-| **Browsers** | View and manage detected browser list |
-| **Games** | Manage detected and custom game list |
-| **Database** | Clean expired data, export to CSV |
-| **Logs & Feedback** | View runtime logs, generate feedback packages |
+| **General** | Report theme (3 styles), data retention policy, language switch, auto-start on boot, auto-show yesterday's report on startup |
+| **Ignore List** | Exclude apps from tracking; add from running processes, remove, or clear all |
+| **Categories** | Create custom categories with colors; assign apps via file picker or running process list |
+| **Browsers** | View detected browsers (7 built-in), add custom browsers |
+| **Games** | Auto-detect Steam games, manually add games, add from running processes |
+| **Database** | View database size, clean expired data by retention policy, export to CSV |
+| **Logs & Feedback** | View runtime logs, export feedback packages for bug reporting |
 
 #### 🚫 Ignore Apps from Reports
 
@@ -148,6 +148,8 @@ iscc installer.iss
 ### 🗺️ Roadmap
 
 - [x] **v0.1.0** — Bug fixes, bilingual support (zh-CN / en)
+- [x] **v0.1.1** — Stability improvements, crash fixes
+- [x] **v0.1.2** — Ignore list fixes, process picker, about dialog
 - [ ] **v0.2.0** — Event-driven tracking, auto-update, code signing
 - [ ] **v1.0.0** — Plugin system, cross-platform (macOS / Linux)
 

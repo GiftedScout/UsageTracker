@@ -131,7 +131,10 @@ class UsageTracker:
                         self._end_current_session()
                         last_window_key = None
             except Exception as e:
-                logger.error('追踪循环错误: %s', e)
+                logger.error('追踪循环错误: %s', e, exc_info=True)
+            except BaseException:
+                logger.critical('追踪循环致命异常', exc_info=True)
+                raise
             self._stop_event.wait(self.check_interval)
 
     def _update_current_duration(self) -> None:

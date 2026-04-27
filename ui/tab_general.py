@@ -6,12 +6,48 @@ from tkinter import ttk
 from src.version import VERSION
 from src.i18n import t, init as init_i18n, get_language
 
+# 主题：(存储 key, 翻译 key)
 THEMES = [
-    ('minimal', 'minimal'),
-    ('fairy_tale', 'fairy_tale'),
-    ('business', 'business'),
+    ('minimal',    'theme.minimal'),
+    ('fairy_tale', 'theme.fairy_tale'),
+    ('business',   'theme.business'),
+]
+# 数据保留：(存储 key, 翻译 key)
+RETENTIONS = [
+    ('unlimited', 'retention.unlimited'),
+    ('1year',     'retention.1year'),
+    ('3months',   'retention.3months'),
+    ('1month',    'retention.1month'),
 ]
 LANGUAGES = [('zh-CN', '中文'), ('en', 'English')]
+
+
+def _translated_values(pairs):
+    """返回显示文本列表（兼容翻译 key 和直接文本）"""
+    result = []
+    for _, val in pairs:
+        translated = t(val)
+        result.append(translated if translated != val else val)
+    return result
+
+
+def _key_to_display(pairs, key_val):
+    """将存储 key 转换为对应的显示文本"""
+    for k, val in pairs:
+        if k == key_val:
+            translated = t(val)
+            return translated if translated != val else val
+    return key_val
+
+
+def _display_to_key(pairs, display_val):
+    """将显示文本反向映射回存储 key"""
+    for k, val in pairs:
+        translated = t(val)
+        text = translated if translated != val else val
+        if text == display_val:
+            return k
+    return display_val
 
 
 class TabGeneral(ttk.Frame):
@@ -43,26 +79,26 @@ class TabGeneral(ttk.Frame):
 
         # 主题
         ttk.Label(self, text=t('general.theme')).grid(row=row, column=0, **pad)
-        self._theme_var = tk.StringVar(value=self._config.theme)
+        self._theme_var = tk.StringVar(value=_key_to_display(THEMES, self._config.theme))
         theme_combo = ttk.Combobox(self, textvariable=self._theme_var,
-                                    values=[v for _, v in THEMES], state='readonly', width=16)
+                                    values=_translated_values(THEMES), state='readonly', width=16)
         theme_combo.grid(row=row, column=1, **pad)
         row += 1
 
         # 数据保留
         ttk.Label(self, text=t('general.retention')).grid(row=row, column=0, **pad)
-        self._retention_var = tk.StringVar(value=self._config.data_retention)
+        self._retention_var = tk.StringVar(value=_key_to_display(RETENTIONS, self._config.data_retention))
         ret_combo = ttk.Combobox(self, textvariable=self._retention_var,
-                                 values=['unlimited', '1year', '3months', '1month'],
+                                 values=_translated_values(RETENTIONS),
                                  state='readonly', width=16)
         ret_combo.grid(row=row, column=1, **pad)
         row += 1
 
         # 语言
         ttk.Label(self, text=t('general.language')).grid(row=row, column=0, **pad)
-        self._lang_var = tk.StringVar(value=get_language())
+        self._lang_var = tk.StringVar(value=_key_to_display(LANGUAGES, get_language()))
         lang_combo = ttk.Combobox(self, textvariable=self._lang_var,
-                                  values=[v for _, v in LANGUAGES], state='readonly', width=16)
+                                  values=_translated_values(LANGUAGES), state='readonly', width=16)
         lang_combo.grid(row=row, column=1, **pad)
         lang_combo.bind('<<ComboboxSelected>>', self._on_language_change)
         row += 1
@@ -97,14 +133,14 @@ class TabGeneral(ttk.Frame):
         ttk.Label(self, text=t('general.version', version=VERSION), foreground='#888').grid(row=row, column=0, **pad)
 
     def _on_language_change(self, event=None):
-        new_lang = self._lang_var.get()
+        new_lang = _display_to_key(LANGUAGES, self._lang_var.get())
         init_i18n(new_lang)
 
     def apply(self):
         """应用按钮回调：统一提交所有变更"""
-        self._config.theme = self._theme_var.get()
-        self._config.data_retention = self._retention_var.get()
-        self._config.language = self._lang_var.get()
+        self._config.theme = _display_to_key(THEMES, self._theme_var.get())
+        self._config.data_retention = _display_to_key(RETENTIONS, self._retention_var.get())
+        self._config.language = _display_to_key(LANGUAGES, self._lang_var.get())
         self._config.auto_start = self._auto_start_var.get()
         self._config.auto_show_daily_report = self._auto_report_var.get()
         self._config.save()

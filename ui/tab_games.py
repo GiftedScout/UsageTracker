@@ -5,6 +5,7 @@ from tkinter import ttk, messagebox
 import logging
 
 from src.i18n import t
+from ui.process_picker import ProcessPicker
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ class TabGames(ttk.Frame):
                   width=12).pack(side='left', padx=2)
         ttk.Button(btn_frame, text=t('games.add'),
                    command=self._add_game).pack(side='left', padx=2)
+        ttk.Button(btn_frame, text=t('process_picker.from_process'),
+                   command=self._add_game_from_process).pack(side='left', padx=2)
         ttk.Button(btn_frame, text=t('games.remove_selected'),
                    command=self._remove_game).pack(side='left', padx=2)
 
@@ -115,6 +118,17 @@ class TabGames(ttk.Frame):
         self._classifier.refresh_all_games()
         self._populate_list()
         self._update_count()
+
+    def _add_game_from_process(self):
+        """从当前运行进程中选择游戏（仅取文件名，不需要完整路径）"""
+        picker = ProcessPicker(self, exe_only=True)
+        self.wait_window(picker)
+        if picker.result:
+            exe  = picker.result['exe']   # 仅文件名（exe_only=True）
+            name = picker.result['name'].replace('.exe', '').replace('_', ' ')
+            # 预填到输入框，让用户确认后点"添加"
+            self._exe_var.set(exe)
+            self._name_var.set(name)
 
     def apply(self):
         pass

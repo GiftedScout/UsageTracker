@@ -215,23 +215,26 @@ def _run_app():
 
     # 通知回调 — 保存剩余增量 + 通知（不再 pop，防止 _auto_save 重复保存）
     def _on_session_end(old_session, new_session):
-        if not old_session:
-            return
-        cat = classifier.classify(
-            old_session.name, old_session.window_title, old_session.exe_path)
-        # 所有非 skip 分类都保存数据（修复：原版跳过 'other' 导致数据丢失）
-        if cat != 'skip' and old_session.duration_seconds >= MIN_AUTO_SAVE_DURATION:
-            _save_session_data(old_session)
-        if cat in ('skip', 'other'):
-            return
-        # 仅对 browser / game 做通知
-        from datetime import date as _date
-        today = _date.today().isoformat()
-        records = data_store.get_daily_usage(today)
-        total = sum(r.duration_seconds for r in records if r.category == cat)
-        alerts = notifier.update_usage(cat, total)
-        for alert in alerts:
-            data_store.save_alert(cat, alert)
+        try:
+            if not old_session:
+                return
+            cat = classifier.classify(
+                old_session.name, old_session.window_title, old_session.exe_path)
+            # 所有非 skip 分类都保存数据（修复：原版跳过 'other' 导致数据丢失）
+            if cat != 'skip' and old_session.duration_seconds >= MIN_AUTO_SAVE_DURATION:
+                _save_session_data(old_session)
+            if cat in ('skip', 'other'):
+                return
+            # 仅对 browser / game 做通知
+            from datetime import date as _date
+            today = _date.today().isoformat()
+            records = data_store.get_daily_usage(today)
+            total = sum(r.duration_seconds for r in records if r.category == cat)
+            alerts = notifier.update_usage(cat, total)
+            for alert in alerts:
+                data_store.save_alert(cat, alert)
+        except Exception as e:
+            logger.error('_on_session_end 异常: %s', e, exc_info=True)
 
     tracker.on_app_switch = _on_session_end
 
@@ -340,9 +343,13 @@ def _run_app():
         tracker.start()
         logger.info('UsageTracker 已启动')
 
-        # 开机自动弹出昨日报告（在托盘就绪后触发，不再用固定延迟）
+        # 开机自动弹出昨日报告：仅当天第一次启动时弹出
         if config.auto_show_daily_report:
-            tray_app_obj._auto_open_daily = True
+            today_str = datetime.now().date().isoformat()
+            if config.last_report_shown_date != today_str:
+                tray_app_obj._auto_open_daily = True
+                config.last_report_shown_date = today_str
+                config.save()
 
         # 运行托盘（阻塞）
         tray_app_obj.run()

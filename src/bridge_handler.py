@@ -7,8 +7,6 @@
 
 import json
 import logging
-import os
-from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -36,13 +34,35 @@ class BridgeHandler:
 
     def _handle_ignore(self, exe_path: str, app_name: str) -> bool:
         """执行忽略应用操作"""
-        exe_path = os.path.realpath(exe_path)
+        # 无 exe_path 时，尝试通过正在运行的进程匹配
+        if not exe_path and app_name:
+            exe_path = self._resolve_exe_by_name(app_name)
+        if not exe_path:
+            logger.warning('忽略操作缺少 exe_path 且无法匹配: %s', app_name)
+            return False
+        # 不做 realpath 转换，保持与 psutil 返回路径格式一致
         if self._config_manager:
             self._config_manager.add_ignored_app(exe_path, app_name)
         if self._data_store:
             self._data_store.add_ignored_app(exe_path, app_name)
         logger.info('已忽略应用: %s (%s)', app_name, exe_path)
         return True
+
+    @staticmethod
+    def _resolve_exe_by_name(app_name: str) -> str:
+        """通过正在运行的进程按 app_name 匹配，返回 exe_path"""
+        import psutil
+        name_lower = app_name.lower()
+        try:
+            for p in psutil.process_iter(['name', 'exe']):
+                try:
+                    if p.info['name'] and p.info['name'].lower() == name_lower:
+                        return p.info['exe'] or ''
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except Exception:
+            pass
+        return ''
 
     def poll_once(self, config_manager=None, data_store=None) -> int:
         """执行一次轮询，返回处理的请求数"""
@@ -107,14 +127,20 @@ class BridgeHandler:
                     body = json.loads(self.rfile.read(length))
                     exe_path = body.get('exe_path', '')
                     app_name = body.get('app_name', '')
-                    if not exe_path or not app_name:
+                    if not app_name:
                         self._respond(400, {'ok': False, 'msg': '缺少参数'})
                         return
-                    bridge._handle_ignore(exe_path, app_name)
+                    ok = bridge._handle_ignore(exe_path, app_name)
+                    if not ok:
+                        self._respond(400, {'ok': False, 'msg': '无法获取进程路径'})
+                        return
                     self._respond(200, {'ok': True, 'msg': f'已忽略: {app_name}'})
                 except Exception as e:
                     logger.error('HTTP ignore 请求失败: %s', e)
-                    self._respond(500, {'ok': False, 'msg': str(e)})
+                    try:
+                        self._respond(500, {'ok': False, 'msg': str(e)})
+                    except Exception:
+                        pass  # 连接已断开，忽略二次写入错误
 
             def do_OPTIONS(self):
                 self.send_response(204)

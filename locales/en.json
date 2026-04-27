@@ -69,7 +69,7 @@
   "categories.executable": "Executable Files",
   "categories.all_files": "All Files",
   "categories.already_in": "This app is already in the category",
-  "categories.app_hint": "Hint: Click 'Add App' to select the .exe file. The full path is obtained automatically.",
+  "categories.app_hint": "Hint: Browse to select a .exe file, or click \"From Process\" to pick from running processes.",
 
   "browsers.detected": "Detected Browsers",
   "browsers.process_name": "Process:",
@@ -87,7 +87,7 @@
   "games.remove_selected": "Remove Selected",
   "games.count": "Steam Games: {steam}  |  Non-Steam Games: {extra}",
   "games.exists": "{exe} is already in the game list",
-  "games.exe_hint": "Hint: Only the process filename is needed (e.g. game.exe), no full path required.",
+  "games.exe_hint": "Hint: You can manually enter the exe filename (e.g. game.exe), or click \"From Process\" to auto-fill.",
 
   "ignore.ignored_apps": "Ignored Apps",
   "ignore.app_name": "App Name",
@@ -111,6 +111,7 @@
   "database.cleanup_done": "Cleaned {count} expired records.",
   "database.export_done": "Exported {count} records to:\n{path}",
   "database.export_failed": "Export Failed",
+  "database.date_format_error": "Invalid date format. Please use YYYY-MM-DD (e.g. 2026-04-27).",
 
   "feedback.logs": "Logs",
   "feedback.level": "Level:",
@@ -182,6 +183,17 @@
   "notifier.game": "Games",
   "notifier.first_alert": "You've used {cat} for over 1 hour ({minutes} min). Take a break!",
   "notifier.repeat_alert": "You've used {cat} for {minutes} min (1h{extra}m over). Time for a break!",
+
+  "process_picker.title": "Select from Running Processes",
+  "process_picker.search": "Search:",
+  "process_picker.col_name": "Process",
+  "process_picker.col_pid": "PID",
+  "process_picker.col_exe": "Path",
+  "process_picker.loading": "Loading process list...",
+  "process_picker.count": "{count} processes found",
+  "process_picker.refresh": "Refresh",
+  "process_picker.psutil_missing": "psutil is missing, cannot list processes",
+  "process_picker.from_process": "From Process",
 
   "dialog.hint": "Info",
   "dialog.confirm": "Confirm",

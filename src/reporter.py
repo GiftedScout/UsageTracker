@@ -195,7 +195,8 @@ class HTMLReportGenerator:
             exe = app_exe_map.get(app, '')
             safe_app = app.replace('\\', '\\\\').replace("'", "\\'")
             safe_exe = exe.replace('\\', '\\\\').replace("'", "\\'")
-            app_rows += f"""<tr><td>{app}</td><td class="time-num">{_fmt_h_full(secs)}</td><td><div class="prog-wrap"><div class="prog-fill" style="width:{pct(secs,report.total_usage_seconds)};background:{cat_colors.get(cat_key, '#9e8070')}"></div></div></td><td class="time-num">{pct(secs, report.total_usage_seconds)}</td><td class="ignore-td"><button class="ignore-btn" onclick="ignoreApp('{safe_app}','{safe_exe}',this)" title="{t('report.ignore_btn')}">✕</button></td></tr>"""
+            ignore_btn = f'<button class="ignore-btn" onclick="ignoreApp(\'{safe_app}\',\'{safe_exe}\',this)" title="{t("report.ignore_btn")}">&#10005;</button>'
+            app_rows += f"""<tr><td>{app}</td><td class="time-num">{_fmt_h_full(secs)}</td><td><div class="prog-wrap"><div class="prog-fill" style="width:{pct(secs,report.total_usage_seconds)};background:{cat_colors.get(cat_key, '#9e8070')}"></div></div></td><td class="time-num">{pct(secs, report.total_usage_seconds)}</td><td class="ignore-td">{ignore_btn}</td></tr>"""
 
         game_detail = []
         if self._data_store:

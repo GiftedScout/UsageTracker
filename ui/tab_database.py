@@ -4,10 +4,49 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import logging
 from datetime import date
+import re
 
 from src.i18n import t
 
 logger = logging.getLogger(__name__)
+
+# 数据保留：(存储 key, 翻译 key)
+_RETENTIONS = [
+    ('unlimited', 'retention.unlimited'),
+    ('1year',     'retention.1year'),
+    ('3months',   'retention.3months'),
+    ('1month',    'retention.1month'),
+]
+
+
+def _retention_display(key_val):
+    for k, tkey in _RETENTIONS:
+        if k == key_val:
+            return t(tkey)
+    return key_val
+
+
+def _retention_key(display_val):
+    for k, tkey in _RETENTIONS:
+        if t(tkey) == display_val:
+            return k
+    return display_val
+
+
+def _date_validate_entry(new_value):
+    """tkinter validate 函数：只允许数字和横线"""
+    return re.fullmatch(r'[\d-]*', new_value) is not None
+
+
+def _validate_date(s):
+    """校验日期字符串是否为 YYYY-MM-DD 格式且合法"""
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', s):
+        return False
+    try:
+        date.fromisoformat(s)
+        return True
+    except ValueError:
+        return False
 
 
 class TabDatabase(ttk.Frame):
@@ -35,9 +74,9 @@ class TabDatabase(ttk.Frame):
         retention_frame = ttk.Frame(self)
         retention_frame.grid(row=4, column=0, **{k: v for k, v in pad.items() if k != 'sticky'})
         ttk.Label(retention_frame, text=t('database.retention')).pack(side='left')
-        self._retention_var = tk.StringVar(value=self._config.data_retention)
+        self._retention_var = tk.StringVar(value=_retention_display(self._config.data_retention))
         ret_combo = ttk.Combobox(retention_frame, textvariable=self._retention_var,
-                                 values=['unlimited', '1year', '3months', '1month'],
+                                 values=[t(tkey) for _, tkey in _RETENTIONS],
                                  state='readonly', width=12)
         ret_combo.pack(side='left', padx=4)
 
@@ -54,10 +93,14 @@ class TabDatabase(ttk.Frame):
         date_frame.grid(row=8, column=0, **{k: v for k, v in pad.items() if k != 'sticky'})
         ttk.Label(date_frame, text=t('database.start_date')).pack(side='left')
         self._start_var = tk.StringVar(value='2000-01-01')
-        ttk.Entry(date_frame, textvariable=self._start_var, width=12).pack(side='left', padx=4)
+        start_entry = ttk.Entry(date_frame, textvariable=self._start_var, width=12)
+        start_entry.pack(side='left', padx=4)
+        start_entry.configure(validate='key', validatecommand=(start_entry.register(_date_validate_entry), '%P'))
         ttk.Label(date_frame, text=t('database.end_date')).pack(side='left')
         self._end_var = tk.StringVar(value=date.today().isoformat())
-        ttk.Entry(date_frame, textvariable=self._end_var, width=12).pack(side='left', padx=4)
+        end_entry = ttk.Entry(date_frame, textvariable=self._end_var, width=12)
+        end_entry.pack(side='left', padx=4)
+        end_entry.configure(validate='key', validatecommand=(end_entry.register(_date_validate_entry), '%P'))
 
         ttk.Button(self, text=t('database.export_csv'), command=self._export_csv).grid(
             row=9, column=0, **{k: v for k, v in pad.items() if k != 'sticky'})
@@ -75,7 +118,7 @@ class TabDatabase(ttk.Frame):
         self._size_label.configure(text=text)
 
     def _cleanup(self):
-        policy = self._retention_var.get()
+        policy = _retention_key(self._retention_var.get())
         if policy == 'unlimited':
             messagebox.showinfo(t('dialog.hint'), t('database.cleanup_unlimited'))
             return
@@ -85,6 +128,11 @@ class TabDatabase(ttk.Frame):
             messagebox.showinfo(t('dialog.done'), t('database.cleanup_done', count=deleted))
 
     def _export_csv(self):
+        start = self._start_var.get().strip()
+        end = self._end_var.get().strip()
+        if not _validate_date(start) or not _validate_date(end):
+            messagebox.showwarning(t('dialog.hint'), t('database.date_format_error'))
+            return
         path = filedialog.asksaveasfilename(
             defaultextension='.csv',
             filetypes=[('CSV', '*.csv')],
@@ -100,6 +148,6 @@ class TabDatabase(ttk.Frame):
             messagebox.showerror(t('database.export_failed'), str(e))
 
     def apply(self):
-        # 保存保留策略
-        self._config.data_retention = self._retention_var.get()
+        # 保存保留策略（映射回存储 key）
+        self._config.data_retention = _retention_key(self._retention_var.get())
         self._config.save()

@@ -386,6 +386,12 @@ class DataStore:
             conn.execute(
                 'INSERT OR REPLACE INTO ignored_apps VALUES (?, ?, ?)',
                 (exe_path, app_name, datetime.datetime.now().isoformat()))
+            # 清零当日该应用的历史记录，使日报立即反映忽略效果
+            today = date.today().isoformat()
+            conn.execute(
+                'UPDATE usage_records SET duration_seconds = 0, session_count = 0 '
+                'WHERE date = ? AND exe_path = ? AND exe_path != ""',
+                (today, exe_path))
             conn.commit()
 
     def remove_ignored_app(self, exe_path: str) -> None:
