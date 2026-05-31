@@ -118,10 +118,7 @@ class BridgeHandler:
         bridge = self
 
         class _Handler(BaseHTTPRequestHandler):
-            def do_POST(self):
-                if self.path != '/ignore':
-                    self.send_error(404)
-                    return
+            def _handle_ignore_request(self):
                 try:
                     length = int(self.headers.get('Content-Length', 0))
                     body = json.loads(self.rfile.read(length))
@@ -140,7 +137,27 @@ class BridgeHandler:
                     try:
                         self._respond(500, {'ok': False, 'msg': str(e)})
                     except Exception:
-                        pass  # 连接已断开，忽略二次写入错误
+                        pass
+
+            def _handle_export_pdf(self):
+                """导出当前报告为 PDF（由 HTML 中的按钮触发）"""
+                try:
+                    length = int(self.headers.get('Content-Length', 0))
+                    body = json.loads(self.rfile.read(length))
+                    html_path = body.get('html_path', '')
+                    if not html_path:
+                        self._respond(400, {'ok': False, 'msg': '缺少 html_path'})
+                        return
+                    from .reporter import HTMLReportGenerator
+                    pdf = HTMLReportGenerator.export_pdf(html_path)
+                    if pdf:
+                        self._respond(200, {'ok': True, 'pdf': pdf})
+                    else:
+                        self._respond(500, {'ok': False,
+                            'msg': '导出 PDF 失败，请手动 Ctrl+P 打印为 PDF'})
+                except Exception as e:
+                    logger.error('PDF 导出请求失败: %s', e)
+                    self._respond(500, {'ok': False, 'msg': str(e)})  # 连接已断开，忽略二次写入错误
 
             def do_OPTIONS(self):
                 self.send_response(204)

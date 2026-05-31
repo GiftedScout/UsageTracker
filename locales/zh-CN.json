@@ -7,6 +7,8 @@
   "tray.settings": "设置",
   "tray.about": "关于",
   "tray.exit": "退出",
+  "tray.check_update": "检查更新",
+  "tray.custom_report": "自定义报告",
   "tray.tooltip_yesterday": "昨日：浏览器 {browser} / 游戏 {game}",
   "tray.tooltip_no_data": "暂无历史数据",
   "tray.no_data": "暂无使用记录，稍后再试",
@@ -36,6 +38,10 @@
   "general.privacy": "隐私声明",
   "general.version": "版本: {version}",
   "general.privacy_text": "所有数据仅存储在本地设备，不会联网上传。\n数据库和配置文件位于系统 AppData 目录。",
+  "general.detection_mode": "检测模式:",
+  "general.detection_auto": "自动（优先事件驱动）",
+  "general.detection_event": "事件驱动",
+  "general.detection_polling": "轮询（5秒间隔）",
 
   "theme.minimal": "简约",
   "theme.fairy_tale": "童话",
@@ -113,6 +119,11 @@
   "database.export_failed": "导出失败",
   "database.date_format_error": "日期格式不正确，请使用 YYYY-MM-DD 格式（如 2026-04-27）。",
 
+  "tray.custom_report": "自定义报告",
+  "tray.custom_start": "起始日期 (YYYY-MM-DD):",
+  "tray.custom_end": "结束日期 (YYYY-MM-DD):",
+  "tray.custom_invalid": "起始日期不能大于结束日期",
+
   "feedback.logs": "运行日志",
   "feedback.level": "级别:",
   "feedback.date": "  日期:",
@@ -151,6 +162,7 @@
   "report.percent_col": "百分比",
   "report.action_col": "操作",
   "report.ignore_btn": "忽略此应用",
+  "report.export_pdf": "导出 PDF",
   "report.generated_by": "由 UsageTracker 生成",
   "report.duration_h": "时长(h)",
   "report.connect_failed": "无法连接到 UsageTracker，请确保程序正在运行",
@@ -203,5 +215,30 @@
   "msg.already_running": "UsageTracker 已在运行中。",
   "msg.language_changed": "语言已切换，重启后完全生效",
 
-  "singleton.running": "UsageTracker 已在运行中。"
+  "singleton.running": "UsageTracker 已在运行中。",
+
+  "updater.title": "发现新版本",
+  "updater.found": "新版本 {version} 可用！\n是否前往 GitHub 查看详情并下载？",
+  "updater.latest": "当前已是最新版本。",
+  "updater.check": "立即检查",
+  "updater.enable": "启动时检查更新",
+  "updater.freq": "检查频率:",
+  "updater.freq_startup": "每次启动",
+  "updater.freq_daily": "每日一次",
+  "updater.freq_weekly": "每周一次",
+
+  "settings.mode_switch_to_simple": "精简模式",
+  "settings.mode_switch_to_rich": "精美模式",
+  "settings.mode_simple": "精简模式",
+  "settings.mode_rich": "精美模式",
+  "settings.mode_switch_title": "模式切换",
+  "settings.mode_switch_message": "UI 模式已切换到{mode}，\n请在托盘菜单重新打开设置查看。",
+
+  "onboarding.title": "欢迎使用 UsageTracker",
+  "onboarding.welcome_title": "🎉 欢迎！",
+  "onboarding.description": "UsageTracker 会自动记录您的电脑使用时长，\n生成日报/周报/月报，帮助您了解时间分配。\n所有数据仅存储在本地，不会联网上传。",
+  "onboarding.settings_title": "⚙️ 初始设置",
+  "onboarding.auto_start_recommend": "💡 强烈建议开启开机自启，否则程序不会自动记录您的使用时间",
+  "onboarding.auto_start_tip": "开机时自动启动 UsageTracker",
+  "onboarding.get_started": "开始使用"
 }

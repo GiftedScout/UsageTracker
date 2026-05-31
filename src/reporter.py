@@ -256,8 +256,14 @@ class HTMLReportGenerator:
 <div class="section"><h2>{t('report.category_detail')}</h2><div class="cat-list">{cat_html}</div></div>
 {('<div class="section"><h2>' + t('report.game_breakdown') + '</h2><div class="game-chart-wrap"><canvas id="gameChart"></canvas></div><div class="game-list" style="margin-top:12px">' + game_items_html + '</div></div>') if game_apps else ''}
 <div class="section"><h2>{t('report.app_detail')}</h2><table><thead><tr><th>{t('report.app_col')}</th><th>{t('report.duration_col')}</th><th>{t('report.proportion_col')}</th><th>{t('report.percent_col')}</th><th>{t('report.action_col')}</th></tr></thead><tbody>{app_rows}</tbody></table></div>
-<div class="footer">{t('report.generated_by')}</div>
+<div class="footer">{t('report.generated_by')} · <a href="#" onclick="exportPdf();return false" style="color:inherit;text-decoration:underline;cursor:pointer">{t('report.export_pdf')}</a></div>
 </div><script>
+function exportPdf(){{
+  var btn=event.target; btn.textContent='...'; btn.style.opacity='.5';
+  fetch('http://127.0.0.1:19234/export-pdf',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{html_path:window.location.href.replace('file:///','').replace(/\\//g,'\\\\')}})}})
+  .then(r=>r.json()).then(d=>{{ if(d.ok){{ btn.textContent='PDF ✓'; btn.style.opacity='1'; }}else{{ btn.textContent='✕ 导出失败'; btn.style.opacity='1'; alert(d.msg||'Error'); }} }})
+  .catch(()=>{{ btn.textContent='✕ 导出失败'; btn.style.opacity='1'; alert('{t("report.connect_failed")}'); }});
+}}
 new Chart(document.getElementById('catChart'), {{
     type:'bar', data:{{ labels:{cat_bar_labels}, datasets:{cat_bar_datasets} }},
     options:{{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
@@ -537,6 +543,43 @@ new Chart(document.getElementById('weekChart'), {{
     @staticmethod
     def open_report(filepath: str) -> None:
         webbrowser.open(f'file:///{filepath.replace(chr(92), "/")}')
+
+    @staticmethod
+    def export_pdf(html_path: str, pdf_path: str | None = None) -> str | None:
+        """将 HTML 报告导出为 PDF（利用 Edge/Chrome 无头模式）"""
+        from pathlib import Path as _P
+        import subprocess
+
+        html = _P(html_path)
+        if not html.exists():
+            logger.error('HTML 文件不存在: %s', html_path)
+            return None
+
+        if pdf_path is None:
+            pdf_path = str(html.with_suffix('.pdf'))
+
+        chrome_candidates = [
+            r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+            r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+        ]
+        for chrome in chrome_candidates:
+            if _P(chrome).exists():
+                try:
+                    subprocess.run([
+                        chrome, '--headless', '--disable-gpu',
+                        f'--print-to-pdf={pdf_path}',
+                        html_path
+                    ], check=True, timeout=30,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    logger.info('PDF 已导出: %s', pdf_path)
+                    return pdf_path
+                except Exception as e:
+                    logger.warning('PDF 导出失败: %s', e)
+                    continue
+        logger.warning('未找到 Edge/Chrome，无法导出 PDF')
+        return None
 
     def get_latest_report(self) -> str | None:
         reports = sorted(self.output_dir.glob('usage_report_*.html'))

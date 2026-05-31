@@ -1,4 +1,8 @@
-<h1 align="center">🖥️ UsageTracker</h1>
+<p align="center">
+  <img src="assets/banner.png" alt="UsageTracker 封面" width="800">
+</p>
+
+<h1 align="center"><img src="assets/logo.png" width="48" alt="Logo"> UsageTracker</h1>
 
 <p align="right">
   中文 | <a href="README.md">English</a>
@@ -68,6 +72,12 @@
 - **🔔 超时提醒**：浏览器或游戏使用过久时弹出系统通知，提醒你休息
 - **🛡️ 纯本地运行**：不联网、不上传、无广告，所有数据仅存于你的电脑
 - **🌐 中英双语**：完整支持中文和英文，安装时选择语言，也可在设置中随时切换
+
+---
+
+### 💬 交流反馈
+
+如果有其他疑问或是想交流心得，欢迎加入 QQ 群：**747117152**
 
 ---
 
@@ -150,7 +160,7 @@ iscc installer.iss
 - [x] **v0.1.0** — Bug 修复，中英双语支持
 - [x] **v0.1.1** — 稳定性改进，崩溃修复
 - [x] **v0.1.2** — 忽略名单修复，进程选择器，关于对话框
-- [ ] **v0.2.0** — 事件驱动追踪（替代轮询）、自动更新机制、代码签名
+- [ ] **v0.2.0** — 事件驱动追踪（替代轮询）、自动更新、精美模式设置界面
 - [ ] **v1.0.0** — 插件系统、跨平台适配（macOS / Linux）
 
 ---

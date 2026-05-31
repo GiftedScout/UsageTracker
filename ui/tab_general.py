@@ -20,6 +20,16 @@ RETENTIONS = [
     ('1month',    'retention.1month'),
 ]
 LANGUAGES = [('zh-CN', '中文'), ('en', 'English')]
+DETECTION_MODES = [
+    ('auto',    'general.detection_auto'),
+    ('event',   'general.detection_event'),
+    ('polling', 'general.detection_polling'),
+]
+UPDATE_FREQS = [
+    ('startup', 'updater.freq_startup'),
+    ('daily',   'updater.freq_daily'),
+    ('weekly',  'updater.freq_weekly'),
+]
 
 
 def _translated_values(pairs):
@@ -119,6 +129,58 @@ class TabGeneral(ttk.Frame):
                         ).grid(row=row, column=0, columnspan=2, **pad)
         row += 1
 
+        # 检测模式
+        ttk.Label(self, text=t('general.detection_mode')).grid(row=row, column=0, **pad)
+        self._detection_var = tk.StringVar(
+            value=_key_to_display(DETECTION_MODES, self._config.detection_mode))
+        detection_combo = ttk.Combobox(self, textvariable=self._detection_var,
+                                       values=_translated_values(DETECTION_MODES),
+                                       state='readonly', width=20)
+        detection_combo.grid(row=row, column=1, **pad)
+        row += 1
+
+        # ── 更新检查 ──
+        self._check_update_var = tk.BooleanVar(value=self._config.check_update)
+        ttk.Checkbutton(self, text=t('updater.enable'),
+                        variable=self._check_update_var).grid(
+            row=row, column=0, columnspan=2, **pad)
+        row += 1
+
+        ttk.Label(self, text=t('updater.freq')).grid(row=row, column=0, **pad)
+        self._update_freq_var = tk.StringVar(
+            value=_key_to_display(UPDATE_FREQS, self._config.check_update_freq))
+        freq_combo = ttk.Combobox(self, textvariable=self._update_freq_var,
+                                  values=_translated_values(UPDATE_FREQS),
+                                  state='readonly', width=16)
+        freq_combo.grid(row=row, column=1, **pad)
+        row += 1
+
+        # 立即检查按钮
+        def _check_now():
+            from src.updater import check_update_async
+            from src.version import VERSION as _VER
+            import tkinter as tk
+            from tkinter import messagebox
+            root = tk.Tk()
+            root.withdraw()
+            root.wm_attributes('-topmost', True)
+            def _cb(info):
+                nonlocal root
+                if info:
+                    msg = t('updater.found', version=info['version'])
+                    ret = messagebox.askyesno(t('updater.title'), msg, parent=root)
+                    if ret:
+                        import webbrowser
+                        webbrowser.open(info['url'])
+                else:
+                    messagebox.showinfo(t('updater.title'), t('updater.latest'), parent=root)
+                root.destroy()
+            check_update_async(_VER, callback=_cb, force=True)
+
+        ttk.Button(self, text=t('updater.check'), command=_check_now).grid(
+            row=row, column=1, **pad)
+        row += 1
+
         ttk.Separator(self, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=8)
         row += 1
 
@@ -143,6 +205,9 @@ class TabGeneral(ttk.Frame):
         self._config.language = _display_to_key(LANGUAGES, self._lang_var.get())
         self._config.auto_start = self._auto_start_var.get()
         self._config.auto_show_daily_report = self._auto_report_var.get()
+        self._config.detection_mode = _display_to_key(DETECTION_MODES, self._detection_var.get())
+        self._config.check_update = self._check_update_var.get()
+        self._config.check_update_freq = _display_to_key(UPDATE_FREQS, self._update_freq_var.get())
         self._config.save()
         if self._is_test_run:
             return  # 测试模式：跳过开机自启写入，保护 CLI 环境

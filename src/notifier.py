@@ -4,6 +4,7 @@
 - 满 60 分钟首次提醒，之后每 30 分钟再次提醒
 """
 
+import base64
 import logging
 import subprocess
 import threading
@@ -83,11 +84,13 @@ class UsageNotifier:
         _title = self._xml_escape(title)
         _msg = self._xml_escape(message)
         app_id = r'{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+        xml_payload = f'<toast><visual><binding template="ToastGeneric"><text>{_title}</text><text>{_msg}</text></binding></visual></toast>'
+        xml_b64 = base64.b64encode(xml_payload.encode('utf-8')).decode('ascii')
         ps_script = (
             "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null\n"
             "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null\n"
             "$xml = New-Object Windows.Data.Xml.Dom.XmlDocument\n"
-            f"$xml.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>{_title}</text><text>{_msg}</text></binding></visual></toast>')\n"
+            f"$xml.LoadXml([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('{xml_b64}')))\n"
             "$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)\n"
             f"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{app_id}').Show($toast)\n"
         )
@@ -95,7 +98,7 @@ class UsageNotifier:
             result = subprocess.run(
                 ['powershell', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
                  '-Command', ps_script],
-                capture_output=True, text=True, timeout=10)
+                capture_output=True, timeout=10, encoding='utf-8', errors='replace')
             if result.returncode != 0:
                 logger.warning('Toast 失败 (rc=%d): %s', result.returncode, result.stderr[:150])
             return result.returncode == 0

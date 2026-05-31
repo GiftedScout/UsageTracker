@@ -34,7 +34,20 @@ def _setup_logging():
 
 
 def _create_icon():
-    """创建托盘图标（程序化生成 32x32 蓝色圆形图标）"""
+    """创建托盘图标（优先加载 assets/icon.ico，否则程序化生成）"""
+    # 在 PyInstaller 打包后，assets 在 sys._MEIPASS 下
+    if getattr(sys, 'frozen', False):
+        base = Path(sys._MEIPASS)
+    else:
+        base = Path(__file__).resolve().parent.parent
+    icon_path = base / 'assets' / 'icon.ico'
+    if icon_path.exists():
+        try:
+            from PIL import Image
+            return Image.open(icon_path)
+        except Exception:
+            pass
+    # 程序化生成 32x32 蓝色圆形图标（兜底）
     from PIL import Image, ImageDraw
     size = 32
     img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
@@ -94,6 +107,17 @@ def _show_privacy_dialog():
     return config if result['accepted'] else None
 
 
+def _get_exe_path():
+    """获取可执行文件路径（用于启动管理）"""
+    import sys as _sys
+    if getattr(_sys, 'frozen', False):
+        # PyInstaller 打包后：_MEIPASS 上层就是 exe
+        return _sys.executable
+    else:
+        # 开发模式：指向 src/main.py 的上层目录中的启动脚本（仅用于测试）
+        return str(Path(__file__).resolve().parent.parent / 'UsageTracker.exe')
+
+
 def _run_app():
     """主应用逻辑"""
     _setup_logging()
@@ -114,11 +138,44 @@ def _run_app():
         ctypes.windll.user32.MessageBoxW(0, t('singleton.running'), t('dialog.hint'), 0x40)
         return 0
 
-    # 首次启动隐私声明
-    config = _show_privacy_dialog()
-    if config is None:
-        logger.info('用户未接受隐私声明，退出')
-        return 0
+    # 检查是否为首次运行（安装后）
+    from src.config_manager import ConfigManager
+    from src.startup_manager import StartupManager
+    from src.i18n import init as init_i18n
+    config = ConfigManager()
+    
+    # ── 创建持久化的隐藏 tk 根窗口（避免多次 Tk() 崩溃） ──
+    import tkinter as _tk
+    _tk_root = _tk.Tk()
+    _tk_root.withdraw()
+    
+    if config.first_run:
+        # 初始化国际化（onboarding 需要翻译）
+        init_i18n(config.language)
+        # 首次运行，显示引导界面
+        logger.info('首次运行，显示引导界面')
+        from ui.onboarding import OnboardingWindow
+        onboarding_window = OnboardingWindow(_tk_root, config, StartupManager(exe_path=_get_exe_path()))
+        onboarding_window.wait()  # 阻塞直到引导完成
+        
+        # 重新加载配置（因为可能在引导中被修改）
+        config = ConfigManager()
+        
+        # 首次运行后仍需检查隐私声明
+        if not config.privacy_accepted:
+            init_i18n(config.language)
+            if not _show_privacy_dialog():
+                _tk_root.destroy()
+                logger.info('用户未接受隐私声明，退出')
+                return 0
+    else:
+        # 非首次运行，直接检查隐私声明
+        init_i18n(config.language)
+        if not config.privacy_accepted:
+            if not _show_privacy_dialog():
+                _tk_root.destroy()
+                logger.info('用户未接受隐私声明，退出')
+                return 0
 
     # 初始化国际化
     from src.i18n import init as init_i18n
@@ -130,7 +187,6 @@ def _run_app():
     from src.reporter import HTMLReportGenerator
     from src.tracker import UsageTracker
     from src.notifier import UsageNotifier
-    from src.startup_manager import StartupManager
     from src.bridge_handler import BridgeHandler
     from src.crash_handler import CrashHandler
 
@@ -141,15 +197,16 @@ def _run_app():
     classifier = AppClassifier(config_manager=config)
     reporter = HTMLReportGenerator()
     reporter.set_data_store(data_store)
-    tracker = UsageTracker(check_interval=config.check_interval)
+    tracker = UsageTracker(check_interval=config.check_interval,
+                            detection_mode=config.detection_mode)
     notifier = UsageNotifier()
     crash_handler = CrashHandler()
 
     # 启动管理 — 自动解析可执行路径
+    _exe_path = _get_exe_path()
     import sys as _sys
     if getattr(_sys, 'frozen', False):
         # PyInstaller 打包后：_MEIPASS 上层就是 exe
-        _exe_path = _sys.executable
         # 安全检测：若运行在 dist\ 目录下（非正式安装路径），禁用自启写入
         _install_dir = Path(_exe_path).parent
         _is_test_run = ('dist' in _install_dir.parts or
@@ -157,7 +214,6 @@ def _run_app():
                             str(Path(__file__).resolve().parent.parent).lower()))
     else:
         # 开发模式：指向 src/main.py 的上层目录中的启动脚本（仅用于测试）
-        _exe_path = str(Path(__file__).resolve().parent.parent / 'UsageTracker.exe')
         _is_test_run = True  # 开发模式同样禁用自启
     startup = StartupManager(exe_path=_exe_path)
     if _is_test_run:
@@ -288,6 +344,9 @@ def _run_app():
                 sw._on_ok = _on_close_ok
                 sw._on_cancel = _on_close_cancel
 
+                # 模式切换时也要销毁 settings_root 防止线程卡住
+                sw._on_switched_cb = lambda: settings_root.after(0, _destroy)
+
                 # 居中显示
                 sw._window.update_idletasks()
                 w, h = 700, 500
@@ -342,6 +401,30 @@ def _run_app():
         # 启动追踪
         tracker.start()
         logger.info('UsageTracker 已启动')
+
+        # 启动时检查更新
+        if config.check_update:
+            logger.info('启动更新检查...')
+            from src.updater import check_update_async
+            def _on_update_result(update_info):
+                if update_info:
+                    from src.i18n import t as _t
+                    import tkinter as tk
+                    from tkinter import messagebox
+                    root = tk.Tk()
+                    root.withdraw()
+                    root.wm_attributes('-topmost', True)
+                    msg = _t('updater.found', version=update_info['version'])
+                    result = messagebox.askyesno(
+                        _t('updater.title'), msg,
+                        parent=root)
+                    root.destroy()
+                    if result:
+                        import webbrowser
+                        webbrowser.open(update_info['url'])
+                else:
+                    logger.debug('更新检查完成：已是最新版')
+            check_update_async(VERSION, callback=_on_update_result)
 
         # 开机自动弹出昨日报告：仅当天第一次启动时弹出
         if config.auto_show_daily_report:

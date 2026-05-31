@@ -33,6 +33,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     'game_dirs': [],
     'ignored_apps': [],
     'custom_categories': [],
+    'ui_mode': 'rich',  # 'simple' or 'rich'
+    'first_run': True,  # Installation first run flag
+    'detection_mode': 'auto',  # 'auto', 'event', 'polling'
+    'check_update': True,  # 启动时检查更新
+    'check_update_freq': 'startup',  # 'startup', 'daily', 'weekly'
 }
 
 # 合法取值
@@ -178,6 +183,59 @@ class ConfigManager:
     @property
     def custom_categories(self) -> list[dict[str, Any]]:
         return self._config.get('custom_categories', [])
+
+    @property
+    def ui_mode(self) -> str:
+        """Get UI mode: 'simple' or 'rich'."""
+        mode = self._config.get('ui_mode', 'rich')
+        if mode not in ('simple', 'rich'):
+            return 'rich'  # Default to rich mode
+        return mode
+
+    @ui_mode.setter
+    def ui_mode(self, value: str) -> None:
+        """Set UI mode: 'simple' or 'rich'."""
+        if value in ('simple', 'rich'):
+            self._config['ui_mode'] = value
+
+    @property
+    def first_run(self) -> bool:
+        """Check if this is the first run after installation."""
+        return self._config.get('first_run', True)
+
+    @first_run.setter
+    def first_run(self, value: bool) -> None:
+        """Set first run flag."""
+        self._config['first_run'] = bool(value)
+
+    @property
+    def detection_mode(self) -> str:
+        """检测模式: 'auto', 'event', 'polling'"""
+        return self._config.get('detection_mode', 'auto')
+
+    @detection_mode.setter
+    def detection_mode(self, value: str) -> None:
+        if value in ('auto', 'event', 'polling'):
+            self._config['detection_mode'] = value
+
+    @property
+    def check_update(self) -> bool:
+        """是否启动时自动检查更新"""
+        return self._config.get('check_update', True)
+
+    @check_update.setter
+    def check_update(self, value: bool) -> None:
+        self._config['check_update'] = bool(value)
+
+    @property
+    def check_update_freq(self) -> str:
+        """检查频率: 'startup', 'daily', 'weekly'"""
+        return self._config.get('check_update_freq', 'startup')
+
+    @check_update_freq.setter
+    def check_update_freq(self, value: str) -> None:
+        if value in ('startup', 'daily', 'weekly'):
+            self._config['check_update_freq'] = value
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._config.get(key, default)

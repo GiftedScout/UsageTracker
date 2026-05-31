@@ -50,6 +50,10 @@ class DataStore:
             DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             db_path = str(DB_PATH)
         self.db_path = db_path
+        # Batch write buffer
+        self._batch_buffer: list[tuple] = []
+        self._batch_lock = __import__('threading').Lock()
+        self._batch_max = 20  # 积累 20 条后提交
         self._init_database()
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -81,6 +85,7 @@ class DataStore:
                 )''')
             cur.execute('CREATE INDEX IF NOT EXISTS idx_usage_date ON usage_records(date)')
             cur.execute('CREATE INDEX IF NOT EXISTS idx_usage_app ON usage_records(app_name)')
+            cur.execute('CREATE INDEX IF NOT EXISTS idx_usage_app_date ON usage_records(app_name, date)')
 
             # Schema 迁移
             cur.execute(
@@ -129,23 +134,36 @@ class DataStore:
                      exe_path: str = '') -> None:
         if record_date is None:
             record_date = date.today().isoformat()
+        with self._batch_lock:
+            self._batch_buffer.append((record_date, app_name, category,
+                                       duration_seconds, exe_path))
+            if len(self._batch_buffer) >= self._batch_max:
+                self._flush_batch()
+    
+    def _flush_batch(self) -> None:
+        """将积累的会话一次性写入数据库"""
+        if not self._batch_buffer:
+            return
         with self._get_conn() as conn:
             cur = conn.cursor()
-            cur.execute(
-                'SELECT id, duration_seconds, session_count FROM usage_records '
-                'WHERE date = ? AND app_name = ?', (record_date, app_name))
-            existing = cur.fetchone()
-            if existing:
-                rid, old_dur, old_cnt = existing
+            for record_date, app_name, category, duration_seconds, exe_path in self._batch_buffer:
                 cur.execute(
-                    'UPDATE usage_records SET duration_seconds = ?, session_count = ? WHERE id = ?',
-                    (old_dur + duration_seconds, old_cnt + 1, rid))
-            else:
-                cur.execute(
-                    'INSERT INTO usage_records (date, app_name, category, duration_seconds, exe_path) '
-                    'VALUES (?, ?, ?, ?, ?)',
-                    (record_date, app_name, category, duration_seconds, exe_path))
+                    'SELECT id, duration_seconds, session_count FROM usage_records '
+                    'WHERE date = ? AND app_name = ?', (record_date, app_name))
+                existing = cur.fetchone()
+                if existing:
+                    rid, old_dur, old_cnt = existing
+                    cur.execute(
+                        'UPDATE usage_records SET duration_seconds = ?, session_count = ? '
+                        'WHERE id = ?',
+                        (old_dur + duration_seconds, old_cnt + 1, rid))
+                else:
+                    cur.execute(
+                        'INSERT INTO usage_records (date, app_name, category, duration_seconds, exe_path) '
+                        'VALUES (?, ?, ?, ?, ?)',
+                        (record_date, app_name, category, duration_seconds, exe_path))
             conn.commit()
+        self._batch_buffer.clear()
 
     def save_alert(self, category: str, message: str,
                    alert_date: str | None = None) -> None:

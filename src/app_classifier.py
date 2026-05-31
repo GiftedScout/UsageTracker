@@ -426,6 +426,50 @@ class AppClassifier:
             return '跳过'
         return CATEGORY_NAMES.get(category, category)
 
+    def get_suggestions(self, min_seconds: float = 600,
+                        top_n: int = 10) -> list[dict]:
+        """分析"其他"分类中的应用，返回分类建议列表
+        
+        建议条件：累计使用时长 >= min_seconds（默认 10 分钟）
+        按使用时长从高到低排序，最多返回 top_n 条。
+        """
+        if not self._config:
+            return []
+        suggestions = []
+        try:
+            # 从 data_store 获取无自定义分类的应用使用数据
+            from .data_store import DataStore
+            from .constants import DB_PATH
+            import sqlite3
+            conn = sqlite3.connect(str(DB_PATH))
+            cur = conn.cursor()
+            # 查找存在于其他分类但无自定义分类的应用
+            cur.execute('''
+                SELECT u.app_name, u.duration_seconds, u.exe_path
+                FROM usage_records u
+                WHERE u.category = 'other'
+                  AND u.app_name NOT IN (
+                      SELECT DISTINCT a.app_name FROM app_category_rules cr
+                      JOIN custom_categories cc ON cr.category_id = cc.id
+                      JOIN usage_records a ON a.exe_path = cr.exe_path
+                  )
+                  AND u.duration_seconds >= ?
+                ORDER BY u.duration_seconds DESC
+                LIMIT ?
+            ''', (min_seconds, top_n))
+            rows = cur.fetchall()
+            conn.close()
+            for app_name, secs, exe_path in rows:
+                suggestions.append({
+                    'app_name': app_name,
+                    'exe_path': exe_path or '',
+                    'duration_seconds': secs,
+                    'category': 'other',
+                })
+        except Exception as e:
+            logger.warning('获取分类建议失败: %s', e)
+        return suggestions
+
     @property
     def all_game_exes(self) -> Set[str]:
         return self.steam_games | set(self.extra_games.keys())

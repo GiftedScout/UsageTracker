@@ -1,4 +1,8 @@
-<h1 align="center">🖥️ UsageTracker</h1>
+<p align="center">
+  <img src="assets/banner.png" alt="UsageTracker Banner" width="800">
+</p>
+
+<h1 align="center"><img src="assets/logo.png" width="48" alt="Logo"> UsageTracker</h1>
 
 <p align="right">
   <a href="README.zh-CN.md">中文</a> | English
@@ -68,6 +72,12 @@ In the daily report, each app row has a **✕** button on the right. Click it to
 - **🔔 Timeout Alerts**: System notifications when you've been using browsers or games for too long
 - **🛡️ Fully Local**: No network, no uploads, no ads — all data stays on your computer
 - **🌐 Bilingual**: Full Chinese and English support — choose at install time or switch in settings
+
+---
+
+### 💬 Community
+
+Have questions or want to share your experience? Join our QQ group: **747117152**
 
 ---
 
@@ -150,7 +160,7 @@ iscc installer.iss
 - [x] **v0.1.0** — Bug fixes, bilingual support (zh-CN / en)
 - [x] **v0.1.1** — Stability improvements, crash fixes
 - [x] **v0.1.2** — Ignore list fixes, process picker, about dialog
-- [ ] **v0.2.0** — Event-driven tracking, auto-update, code signing
+- [ ] **v0.2.0** — Event-driven tracking, auto-update, rich UI mode
 - [ ] **v1.0.0** — Plugin system, cross-platform (macOS / Linux)
 
 ---

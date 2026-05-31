@@ -41,8 +41,10 @@ class TrayApp:
                 pystray.MenuItem(t('tray.yesterday_report'), self._open_daily),
                 pystray.MenuItem(t('tray.last_week_report'), self._open_weekly),
                 pystray.MenuItem(t('tray.last_month_report'), self._open_monthly),
+                pystray.MenuItem(t('tray.custom_report'), self._open_custom),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(t('tray.settings'), self._open_settings, default=True),
+                pystray.MenuItem(t('tray.check_update'), self._check_update),
                 pystray.MenuItem(f'{t("tray.about")} ({VERSION})', self._show_about),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(t('tray.exit'), self._quit),
@@ -64,6 +66,61 @@ class TrayApp:
         self._update_tooltip()
         threading.Thread(target=self._generate_and_open, args=('monthly',),
                          daemon=True, name='open-monthly').start()
+
+    def _open_custom(self, icon=None, item=None) -> None:
+        """自定义时间范围报告"""
+        self._update_tooltip()
+        threading.Thread(target=self._show_custom_dialog,
+                         daemon=True, name='open-custom').start()
+
+    def _show_custom_dialog(self):
+        """弹出日期选择对话框"""
+        import tkinter as tk
+        from tkinter import simpledialog, messagebox
+        from datetime import datetime
+
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes('-topmost', True)
+
+        start_str = simpledialog.askstring(
+            t('tray.custom_report'),
+            t('tray.custom_start'),
+            parent=root)
+        if not start_str:
+            root.destroy()
+            return
+
+        end_str = simpledialog.askstring(
+            t('tray.custom_report'),
+            t('tray.custom_end'),
+            parent=root)
+        if not end_str:
+            root.destroy()
+            return
+
+        root.destroy()
+
+        # Validate dates
+        try:
+            start = datetime.strptime(start_str, '%Y-%m-%d').date()
+            end = datetime.strptime(end_str, '%Y-%m-%d').date()
+        except ValueError:
+            messagebox.showerror(t('dialog.error'),
+                                t('database.date_format_error'))
+            return
+
+        if start > end:
+            messagebox.showerror(t('dialog.error'),
+                                t('tray.custom_invalid'))
+            return
+
+        # Generate report for this range
+        if self._report_gen and self._data_store:
+            theme = self._config.theme if self._config else 'fairy_tale'
+            path = self._report_gen.generate_weekly_report(
+                start.isoformat(), end.isoformat(), theme)
+            self._report_gen.open_report(path)
 
     def _get_report_date(self) -> str:
         """确定日报日期：优先昨天，若昨天无数据则回溯到最近有数据的日期"""
@@ -121,6 +178,37 @@ class TrayApp:
     def _open_settings(self, icon=None, item=None) -> None:
         if self._on_settings:
             self._on_settings()
+
+    def _check_update(self, icon=None, item=None) -> None:
+        """手动检查更新"""
+        from .updater import check_update_async
+        from .version import VERSION as _VER
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes('-topmost', True)
+
+        def _on_result(info):
+            nonlocal root
+            if info:
+                from src.i18n import t as _t
+                msg = _t('updater.found', version=info['version'])
+                result = messagebox.askyesno(
+                    _t('updater.title'), msg, parent=root)
+                if result:
+                    import webbrowser
+                    webbrowser.open(info['url'])
+            else:
+                from src.i18n import t as _t
+                messagebox.showinfo(
+                    _t('updater.title'),
+                    _t('updater.latest'),
+                    parent=root)
+            root.destroy()
+
+        check_update_async(_VER, callback=_on_result, force=True)
 
     def _show_about(self, icon=None, item=None) -> None:
         """弹出关于窗口，显示当前版本更新日志"""

@@ -1,8 +1,8 @@
 ; UsageTracker Inno Setup 安装脚本
-; 版本: 0.1.2
+; 版本: 0.2.0
 
 #define MyAppName "UsageTracker"
-#define MyAppVersion "0.1.2"
+#define MyAppVersion "0.2.0-beta"
 #define MyAppPublisher "chaos"
 #define MyAppURL ""
 #define MyAppExeName "UsageTracker.exe"
@@ -366,6 +366,8 @@ begin
         '  "auto_start": true,' + #13#10 +
         '  "auto_show_daily_report": true,' + #13#10 +
         '  "privacy_accepted": false,' + #13#10 +
+        '  "first_run": true,' + #13#10 +
+        '  "ui_mode": "rich",' + #13#10 +
         '  "browsers": [],' + #13#10 +
         '  "game_dirs": [],' + #13#10 +
         '  "ignored_apps": [],' + #13#10 +
