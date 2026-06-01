@@ -264,9 +264,6 @@ class BridgeHandler:
                 if path == '/api/feedback':
                     return self._api_post_feedback()
 
-                if path == '/api/log-level':
-                    return self._api_post_log_level()
-
                 self._respond(404, {'ok': False, 'msg': 'Not found'})
 
             def do_OPTIONS(self):
@@ -814,37 +811,6 @@ class BridgeHandler:
                     root = logging.getLogger()
                     level_name = logging.getLevelName(root.level)
                     self._respond(200, {'ok': True, 'level': level_name})
-                except Exception as e:
-                    self._respond(500, {'ok': False, 'msg': str(e)})
-
-            def _api_post_log_level(self):
-                """设置日志等级"""
-                try:
-                    body = self._read_body()
-                    level_str = body.get('level', 'INFO').upper()
-                    level_map = {'DEBUG': logging.DEBUG, 'INFO': logging.INFO,
-                                 'WARNING': logging.WARNING, 'ERROR': logging.ERROR}
-                    if level_str not in level_map:
-                        self._respond(400, {'ok': False, 'msg': f'无效等级: {level_str}'})
-                        return
-                    new_level = level_map[level_str]
-                    # 在修改前用 INFO 记录（此时 INFO 仍可通过）
-                    logger.info('即将修改日志等级: INFO -> %s', level_str)
-                    root = logging.getLogger()
-                    root.setLevel(new_level)
-                    for h in root.handlers:
-                        h.setLevel(new_level)
-                    # 修改后用目标等级写一条验证消息
-                    logging.log(new_level, '日志等级已切换为 %s，低于此等级的日志将不再记录',
-                                level_str)
-                    # 持久化到 config（注意用 bridge 而非 self）
-                    try:
-                        if bridge._config_manager:
-                            bridge._config_manager.set('log_level', level_str)
-                            bridge._config_manager.save()
-                    except Exception:
-                        pass
-                    self._respond(200, {'ok': True, 'msg': f'日志等级已更改为 {level_str}'})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 

@@ -905,7 +905,8 @@ async function readLogFile(filename) {
             return;
         }
         if (logInfo) logInfo.textContent = `${filename} (${data.total_lines} lines, showing last ${data.content.split('\n').length})`;
-        logContent.textContent = data.content;
+        _logRawContent = data.content;
+        filterLogContent(cfgLogLevel ? cfgLogLevel.value : 'ALL');
         logContent.style.display = 'block';
     } catch (e) {
         logContent.textContent = 'Error: ' + e.message;
@@ -946,21 +947,31 @@ if (btnOpenFeedbackDir) {
     });
 }
 
-// 日志等级切换
+// 日志筛选（前端过滤预览内容）
+let _logRawContent = null;
+const _logLevelOrder = { 'DEBUG': 0, 'INFO': 1, 'WARNING': 2, 'ERROR': 3 };
+
+function filterLogContent(level) {
+    const logContent = document.getElementById('log-content');
+    if (!logContent || !_logRawContent) return;
+    if (level === 'ALL') {
+        logContent.textContent = _logRawContent;
+        return;
+    }
+    const minLevel = _logLevelOrder[level];
+    const lines = _logRawContent.split('\n');
+    const filtered = lines.filter(line => {
+        const match = line.match(/\[(\w+)\]/);
+        if (!match) return true; // 保留非标准格式行
+        const lvl = match[1];
+        return (_logLevelOrder[lvl] !== undefined) && _logLevelOrder[lvl] >= minLevel;
+    });
+    logContent.textContent = filtered.join('\n');
+}
+
 const cfgLogLevel = document.getElementById('cfg-log-level');
 if (cfgLogLevel) {
-    // 初始化当前等级
-    API.get('/api/log-level').then(data => {
-        if (data && data.ok && data.level) cfgLogLevel.value = data.level;
-    }).catch(() => {});
-    cfgLogLevel.addEventListener('change', async () => {
-        try {
-            const data = await API.post('/api/log-level', { level: cfgLogLevel.value });
-            toast(data && data.ok ? '✅ ' + data.msg : '❌ Failed');
-        } catch (e) {
-            toast('❌ ' + e.message);
-        }
-    });
+    cfgLogLevel.addEventListener('change', () => filterLogContent(cfgLogLevel.value));
 }
 
 /* ---- Init ---- */

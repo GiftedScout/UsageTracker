@@ -106,16 +106,6 @@ def _run_app():
     from src.i18n import init as init_i18n
     config = ConfigManager()
 
-    # 恢复日志等级（如果之前设置过）
-    saved_level = config.get('log_level', 'INFO')
-    if saved_level != 'INFO':
-        _level_map = {'DEBUG': logging.DEBUG, 'WARNING': logging.WARNING, 'ERROR': logging.ERROR}
-        if saved_level in _level_map:
-            root = logging.getLogger()
-            root.setLevel(_level_map[saved_level])
-            for h in root.handlers:
-                h.setLevel(_level_map[saved_level])
-
     # 首次运行处理
     # 用局部变量保存，供后续判断是否需要打开引导页
     _need_onboarding = bool(getattr(config, 'first_run', True) or not getattr(config, 'privacy_accepted', False))
