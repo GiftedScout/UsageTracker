@@ -828,20 +828,22 @@ class BridgeHandler:
                         self._respond(400, {'ok': False, 'msg': f'无效等级: {level_str}'})
                         return
                     new_level = level_map[level_str]
+                    # 在修改前用 INFO 记录（此时 INFO 仍可通过）
+                    logger.info('即将修改日志等级: INFO -> %s', level_str)
                     root = logging.getLogger()
                     root.setLevel(new_level)
-                    # 修改所有 handler（FileHandler + StreamHandler）
                     for h in root.handlers:
                         h.setLevel(new_level)
-                    # 持久化到 config
+                    # 修改后用目标等级写一条验证消息
+                    logging.log(new_level, '日志等级已切换为 %s，低于此等级的日志将不再记录',
+                                level_str)
+                    # 持久化到 config（注意用 bridge 而非 self）
                     try:
-                        if self._config_manager:
-                            self._config_manager.set('log_level', level_str)
-                            self._config_manager.save()
+                        if bridge._config_manager:
+                            bridge._config_manager.set('log_level', level_str)
+                            bridge._config_manager.save()
                     except Exception:
                         pass
-                    logger.warning('日志等级已更改为 %s (level=%d, handlers=%d)',
-                                    level_str, new_level, len(root.handlers))
                     self._respond(200, {'ok': True, 'msg': f'日志等级已更改为 {level_str}'})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
