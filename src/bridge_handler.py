@@ -623,7 +623,9 @@ class BridgeHandler:
                 """读取指定日志文件内容（最近 500 行）"""
                 try:
                     from .constants import LOG_DIR, CRASH_LOG_DIR
-                    qs = urllib.parse.parse_qs(p.qs)
+                    # 从 self.path 解析 query string
+                    _p = urllib.parse.urlparse(self.path)
+                    qs = urllib.parse.parse_qs(_p.query)
                     fname = qs.get('file', [''])[0]
                     if not fname or '..' in fname or '/' in fname or '\\' in fname:
                         self._respond(400, {'ok': False, 'msg': '非法文件名'})
@@ -756,28 +758,28 @@ class BridgeHandler:
 
         # HTTP 线程：带自动重启的 serve_forever
         def _http_loop():
-            while not getattr(bridge, '_stop_event', None) or not bridge._stop_event.is_set():
+            while True:
+                if bridge._stop_event and bridge._stop_event.is_set():
+                    break
                 try:
                     bridge._http_alive.set()
                     self._http_server.serve_forever()
                 except Exception as e:
-                    logger.error('HTTP serve_forever 异常: %s', e)
+                    logger.error('HTTP serve_forever 异常: %s', e, exc_info=True)
                 bridge._http_alive.clear()
-                if getattr(bridge, '_stop_event', None) and bridge._stop_event.is_set():
+                if bridge._stop_event and bridge._stop_event.is_set():
                     break
                 # 等待并重启
                 import time
                 logger.warning('HTTP 服务停止，5 秒后重启...')
                 time.sleep(5)
                 try:
-                    # 创建新的 server 实例
-                    old_server = self._http_server
                     self._http_server = ThreadingHTTPServer(
                         ('127.0.0.1', _BRIDGE_PORT), _Handler)
                     self._http_server.daemon_threads = True
                     logger.info('HTTP 服务已重启')
                 except OSError as e2:
-                    logger.error('HTTP 重启失败: %s', e2)
+                    logger.error('HTTP 重启失败（端口冲突），30 秒后重试: %s', e2)
                     time.sleep(30)
 
         import threading
@@ -787,7 +789,9 @@ class BridgeHandler:
         # 心跳日志（每 5 分钟检查一次 HTTP 存活状态）
         def _heartbeat():
             import time
-            while not getattr(bridge, '_stop_event', None) or not bridge._stop_event.is_set():
+            while True:
+                if bridge._stop_event and bridge._stop_event.is_set():
+                    break
                 time.sleep(300)
                 if not bridge._http_alive.is_set():
                     logger.warning('HTTP 服务已停止响应！')
@@ -801,4 +805,7 @@ class BridgeHandler:
         if self._stop_event:
             self._stop_event.set()
         if self._http_server:
-            self._http_server.shutdown()
+            try:
+                self._http_server.shutdown()
+            except Exception:
+                pass

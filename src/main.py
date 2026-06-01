@@ -315,15 +315,49 @@ def _run_app():
                 config.save()
 
         if _tray_ok:
-            tray_app_obj.run()
-        else:
-            # 无托盘时用 Event 阻塞主线程（保持进程存活）
-            logger.info('无托盘模式：HTTP 服务后台运行')
-            _shutdown_event.wait()
+            # 关键：托盘运行在独立线程，崩溃不影响主进程和 HTTP
+            import time as _time
+
+            def _tray_loop():
+                """托盘线程：pystray 崩溃时自动重启"""
+                local_tray = tray_app_obj
+                while not _shutdown_event.is_set():
+                    try:
+                        local_tray.run()
+                        # 正常退出（用户点了退出）
+                        logger.info('托盘正常退出')
+                        _shutdown_event.set()
+                        break
+                    except Exception as e:
+                        logger.error('托盘崩溃，尝试重启: %s', e, exc_info=True)
+                        if _shutdown_event.is_set():
+                            break
+                        _time.sleep(3)
+                        try:
+                            new_icon = _create_icon()
+                            local_tray = TrayApp(
+                                icon_image=new_icon,
+                                data_store=data_store,
+                                config_manager=config,
+                                report_generator=reporter,
+                                on_settings=_open_settings,
+                                on_quit=_on_quit,
+                            )
+                            logger.info('托盘已重启')
+                        except Exception as e2:
+                            logger.error('托盘重启失败，放弃: %s', e2)
+                            break
+
+            _tray_thr = threading.Thread(
+                target=_tray_loop, daemon=False, name='tray-icon')
+            _tray_thr.start()
+
+        # 主线程：等待退出信号（保持进程存活）
+        _shutdown_event.wait()
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        logger.error('主循环异常: %s', e)
+        logger.error('主循环异常: %s', e, exc_info=True)
         return 1
 
     logger.info('UsageTracker 已退出')
