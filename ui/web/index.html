@@ -6,8 +6,15 @@
     <title>UsageTracker - 设置</title>
     <link id="theme-css" rel="stylesheet" href="static/css/fairy-tale.css">
     <style>
-        /* 主题切换动画 */
         * { transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+        .inline-form { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+        .inline-form input, .inline-form select { min-width: 120px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 14px; }
+        .inline-form input[type="color"] { width: 40px; min-width: 40px; padding: 2px; height: 32px; cursor: pointer; }
+        .form-group { margin: 12px 0; }
+        .form-group label { display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary); }
+        .form-group input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 14px; }
+        .form-group select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 14px; }
+        .btn-row { display: flex; gap: 8px; margin-top: 12px; }
     </style>
 </head>
 <body>
@@ -106,7 +113,7 @@
 
                 <h3>关于</h3>
                 <div class="card">
-                    <p>UsageTracker <span id="app-version">v0.2.0</span></p>
+                    <p>UsageTracker <span id="app-version">v0.3.0</span></p>
                     <p>许可：GPL-3.0</p>
                     <button class="btn btn-secondary" id="btn-check-update">检查更新</button>
                 </div>
@@ -118,13 +125,21 @@
                 <div class="card">
                     <h3>自定义分类</h3>
                     <div id="custom-categories-list"></div>
-                    <button class="btn btn-primary" id="btn-add-category">+ 添加分类</button>
+                    <div class="inline-form">
+                        <input type="text" id="new-category-id" placeholder="分类 ID（如 dev）">
+                        <input type="text" id="new-category-name" placeholder="分类名称（如 开发工具）">
+                        <input type="color" id="new-category-color" value="#0078D4" title="颜色">
+                        <button class="btn btn-primary" id="btn-add-category">添加</button>
+                    </div>
                 </div>
                 <div class="card">
                     <h3>分类中的应用</h3>
                     <select id="category-selector"></select>
                     <div id="category-apps-list" class="app-list"></div>
-                    <button class="btn btn-primary" id="btn-add-app-to-category">+ 添加应用</button>
+                    <div class="inline-form">
+                        <input type="text" id="new-app-path" placeholder="应用路径（如 C:\app\code.exe）">
+                        <button class="btn btn-primary" id="btn-add-app-to-category">添加</button>
+                    </div>
                 </div>
             </section>
 
@@ -134,7 +149,19 @@
                 <p class="desc">配置哪些浏览器 URL 对应哪个分类</p>
                 <div class="card">
                     <div id="browser-rules-list"></div>
-                    <button class="btn btn-primary" id="btn-add-browser-rule">+ 添加规则</button>
+                    <div class="form-group">
+                        <label>规则名称</label>
+                        <input type="text" id="new-browser-name" placeholder="如 GitHub">
+                    </div>
+                    <div class="form-group">
+                        <label>浏览器可执行文件路径</label>
+                        <input type="text" id="new-browser-exe" placeholder="如 C:\app\chrome.exe（留空匹配所有浏览器）">
+                    </div>
+                    <div class="form-group">
+                        <label>URL 匹配模式</label>
+                        <input type="text" id="new-browser-url" placeholder="如 github.com（留空匹配所有 URL）">
+                    </div>
+                    <button class="btn btn-primary" id="btn-add-browser-rule">添加规则</button>
                 </div>
             </section>
 
@@ -144,7 +171,10 @@
                 <p class="desc">配置游戏可执行文件所在目录</p>
                 <div class="card">
                     <div id="game-dirs-list"></div>
-                    <button class="btn btn-primary" id="btn-add-game-dir">+ 添加目录</button>
+                    <div class="inline-form">
+                        <input type="text" id="new-game-dir" placeholder="游戏目录路径（如 D:\Steam\steamapps\common）">
+                        <button class="btn btn-primary" id="btn-add-game-dir">添加</button>
+                    </div>
                 </div>
             </section>
 
@@ -154,7 +184,10 @@
                 <p class="desc">被忽略的应用不会计入使用时长</p>
                 <div class="card">
                     <div id="ignored-apps-list" class="app-list"></div>
-                    <button class="btn btn-primary" id="btn-add-ignore">+ 忽略应用</button>
+                    <div class="inline-form">
+                        <input type="text" id="new-ignore-path" placeholder="应用路径（如 C:\Windows\System32\cmd.exe）">
+                        <button class="btn btn-primary" id="btn-add-ignore">添加</button>
+                    </div>
                 </div>
             </section>
 
@@ -162,10 +195,17 @@
             <section id="tab-database" class="tab-content">
                 <h2>数据库管理</h2>
                 <div class="card">
-                    <p>数据库大小：<span id="db-size">-</span> MB</p>
+                    <p>数据库大小：<span id="db-size">-</span></p>
                     <p>记录条数：<span id="db-records">-</span></p>
-                    <button class="btn btn-secondary" id="btn-backup-db">备份数据库</button>
-                    <button class="btn btn-warning" id="btn-cleanup-db">清理 90 天前数据</button>
+                    <div class="inline-form">
+                        <label>清理天数：</label>
+                        <input type="number" id="cleanup-days" value="90" min="1" style="width: 80px;">
+                        <span>天</span>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-secondary" id="btn-backup-db">备份数据库</button>
+                        <button class="btn btn-warning" id="btn-cleanup-db">清理旧数据</button>
+                    </div>
                 </div>
             </section>
 

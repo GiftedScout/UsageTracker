@@ -11,7 +11,7 @@ import logging
 import mimetypes
 import os
 import urllib.parse
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -613,7 +613,7 @@ class BridgeHandler:
                 logger.debug('bridge-http: ' + fmt, *args)
 
         try:
-            self._http_server = HTTPServer(('127.0.0.1', _BRIDGE_PORT), _Handler)
+            self._http_server = ThreadingHTTPServer(('127.0.0.1', _BRIDGE_PORT), _Handler)
             import threading
             _thr = threading.Thread(target=self._http_server.serve_forever, daemon=True, name='bridge-http')
             _thr.start()

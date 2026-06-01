@@ -40,10 +40,14 @@ def _create_icon():
     else:
         base = Path(__file__).resolve().parent.parent
     icon_path = base / 'assets' / 'icon.ico'
-    if icon_path.exists():
+    if icon_path.exists() and icon_path.stat().st_size > 500:
         try:
             from PIL import Image
-            return Image.open(icon_path)
+            img = Image.open(icon_path)
+            # pystray 需要 RGBA 模式
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            return img
         except Exception:
             pass
     from PIL import Image, ImageDraw
