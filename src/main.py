@@ -261,22 +261,12 @@ def _run_app():
         if config.check_update:
             logger.info('启动更新检查...')
             from src.updater import check_update_async
+            from src.version import VERSION
             def _on_update_result(update_info):
                 if update_info:
-                    from src.i18n import t as _t
-                    import tkinter as tk
-                    from tkinter import messagebox
-                    root = tk.Tk()
-                    root.withdraw()
-                    root.wm_attributes('-topmost', True)
-                    msg = _t('updater.found', version=update_info['version'])
-                    result = messagebox.askyesno(
-                        _t('updater.title'), msg,
-                        parent=root)
-                    root.destroy()
-                    if result:
-                        import webbrowser
-                        webbrowser.open(update_info['url'])
+                    import webbrowser
+                    logger.info('发现新版本: %s', update_info.get('version'))
+                    webbrowser.open(update_info.get('url', ''))
                 else:
                     logger.debug('更新检查完成：已是最新版')
             check_update_async(VERSION, callback=_on_update_result)

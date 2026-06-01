@@ -620,6 +620,14 @@ class BridgeHandler:
             logger.info('Bridge HTTP 服务已启动 (127.0.0.1:%d)', _BRIDGE_PORT)
         except OSError as e:
             logger.warning('Bridge HTTP 启动失败（端口被占用，跳过）: %s', e)
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                f'UsageTracker HTTP 服务启动失败，端口 {_BRIDGE_PORT} 可能被占用。\n\n'
+                f'请先关闭其他 UsageTracker 实例后重试。\n错误: {e}',
+                'UsageTracker - 启动失败',
+                0x40  # MB_ICONINFORMATION
+            )
 
     def stop_polling(self) -> None:
         if self._stop_event:

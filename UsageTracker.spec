@@ -16,6 +16,7 @@ a = Analysis(
         (str(proj / 'assets' / 'banner.png'), 'assets'),
         (str(proj / 'assets' / 'logo.png'), 'assets'),
         (str(proj / 'locales'), 'locales'),
+        (str(proj / 'ui' / 'web'), 'ui/web'),
     ],
     hiddenimports=['psutil', 'pystray', 'PIL', 'tkinter', 'tkinter.ttk', 'tkinter.messagebox', 'tkinter.filedialog', 'tkinter.simpledialog', 'ui.styled_widgets', 'ui.settings_window', 'ui.onboarding', 'ui.tab_general', 'ui.tab_categories', 'ui.tab_browsers', 'ui.tab_games', 'ui.tab_ignore', 'ui.tab_database', 'ui.tab_feedback'],
     hookspath=[],

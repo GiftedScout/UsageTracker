@@ -11,11 +11,14 @@ from .version import VERSION, APP_NAME
 # ---- 数据路径 ----
 # 所有数据统一放在安装目录下（打包模式）或项目根目录（开发模式）
 if getattr(sys, 'frozen', False):
-    # PyInstaller 打包后：exe 所在目录
+    # PyInstaller 打包后：exe 所在目录（用户数据）
     _BASE_DIR = Path(sys.executable).resolve().parent
+    # PyInstaller 数据目录（assets/datas 打包位置）
+    _INTERNAL_DIR = Path(sys._MEIPASS)
 else:
     # 开发模式：项目根目录
     _BASE_DIR = Path(__file__).resolve().parent.parent
+    _INTERNAL_DIR = _BASE_DIR
 
 DATA_DIR = _BASE_DIR / 'data'
 CONFIG_DIR = _BASE_DIR / 'config'
@@ -24,7 +27,7 @@ LOG_DIR = _BASE_DIR / 'logs'
 CRASH_LOG_DIR = _BASE_DIR / 'logs'
 BRIDGE_DIR = _BASE_DIR / 'bridge'
 FEEDBACK_DIR = _BASE_DIR / 'feedback'
-WEB_DIR = _BASE_DIR / 'ui' / 'web'
+WEB_DIR = _INTERNAL_DIR / 'ui' / 'web'
 STEAM_CACHE_PATH = _BASE_DIR / 'data' / 'steam_games.json'
 INSTALL_DIR = _BASE_DIR
 
