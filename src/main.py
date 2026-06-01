@@ -34,23 +34,37 @@ def _setup_logging():
 
 
 def _create_icon():
-    """创建托盘图标（优先加载 assets/icon.ico，否则程序化生成）"""
+    """创建托盘图标（优先 PNG，回退 ICO，最后程序化生成）"""
     if getattr(sys, 'frozen', False):
         base = Path(sys._MEIPASS)
     else:
         base = Path(__file__).resolve().parent.parent
-    icon_path = base / 'assets' / 'icon.ico'
-    if icon_path.exists() and icon_path.stat().st_size > 500:
+    from PIL import Image
+
+    # 优先用 PNG（最可靠，无 ICO 解析问题）
+    png_path = base / 'assets' / 'logo.png'
+    if png_path.exists():
         try:
-            from PIL import Image
-            img = Image.open(icon_path)
-            # pystray 需要 RGBA 模式
-            if img.mode != 'RGBA':
-                img = img.convert('RGBA')
+            img = Image.open(png_path).convert('RGBA')
+            img = img.resize((64, 64), Image.LANCZOS)
             return img
         except Exception:
             pass
-    from PIL import Image, ImageDraw
+
+    # 回退 ICO
+    ico_path = base / 'assets' / 'icon.ico'
+    if ico_path.exists() and ico_path.stat().st_size > 500:
+        try:
+            img = Image.open(ico_path)
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            img = img.resize((64, 64), Image.LANCZOS)
+            return img
+        except Exception:
+            pass
+
+    # 最后手段：程序化生成
+    from PIL import ImageDraw
     size = 32
     img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -233,8 +247,10 @@ def _run_app():
     # 创建托盘
     icon = _create_icon()
     tray_app = None
+    _shutdown_event = threading.Event()
 
     def _on_quit():
+        _shutdown_event.set()
         logger.info('正在退出...')
         tracker._update_current_duration()
         if tracker.current_session:
@@ -246,6 +262,8 @@ def _run_app():
         if tray_app:
             tray_app.stop()
 
+    # 尝试启动托盘（失败不致命，HTTP 服务继续运行）
+    _tray_ok = False
     try:
         from src.tray_app import TrayApp
         tray_app_obj = TrayApp(
@@ -257,7 +275,20 @@ def _run_app():
             on_quit=_on_quit,
         )
         tray_app = tray_app_obj
+        _tray_ok = True
+        logger.info('托盘图标初始化成功')
+    except Exception as e:
+        logger.error('托盘初始化失败（HTTP 服务继续运行）: %s', e, exc_info=True)
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            f'UsageTracker 托盘图标创建失败，程序将在后台运行。\n'
+            f'如需退出，请使用任务管理器。\n\n错误: {e}',
+            'UsageTracker - 警告',
+            0x40,
+        )
 
+    try:
         tracker.start()
         logger.info('UsageTracker 已启动')
 
@@ -276,14 +307,19 @@ def _run_app():
             check_update_async(VERSION, callback=_on_update_result)
 
         # 开机自动弹出昨日报告
-        if config.auto_show_daily_report:
+        if config.auto_show_daily_report and _tray_ok:
             today_str = datetime.now().date().isoformat()
             if config.last_report_shown_date != today_str:
                 tray_app_obj._auto_open_daily = True
                 config.last_report_shown_date = today_str
                 config.save()
 
-        tray_app_obj.run()
+        if _tray_ok:
+            tray_app_obj.run()
+        else:
+            # 无托盘时用 Event 阻塞主线程（保持进程存活）
+            logger.info('无托盘模式：HTTP 服务后台运行')
+            _shutdown_event.wait()
     except KeyboardInterrupt:
         pass
     except Exception as e:

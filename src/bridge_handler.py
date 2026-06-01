@@ -124,10 +124,22 @@ class BridgeHandler:
         self._data_store = data_store
         self._exe_path = exe_path
         bridge = self
+        bridge._http_alive = threading.Event()
+        bridge._http_alive.set()  # assume alive until proven otherwise
 
         class _Handler(BaseHTTPRequestHandler):
             # ── 路由分发 ──
             def do_GET(self):
+                try:
+                    self._do_GET_impl()
+                except ConnectionResetError:
+                    pass
+                except BrokenPipeError:
+                    pass
+                except Exception as e:
+                    logger.error('GET %s 未处理异常: %s', self.path, e)
+
+            def _do_GET_impl(self):
                 p = urllib.parse.urlparse(self.path)
                 path = p.path
                 qs = urllib.parse.parse_qs(p.query)
@@ -172,6 +184,10 @@ class BridgeHandler:
                 if path == '/api/feedback/logs':
                     return self._api_get_feedback_logs()
 
+                # API: 读取日志内容
+                if path == '/api/feedback/logs/read':
+                    return self._api_read_log()
+
                 # API: 检查更新
                 if path == '/api/check-update':
                     return self._api_check_update()
@@ -190,6 +206,20 @@ class BridgeHandler:
                 self._respond(404, {'ok': False, 'msg': 'Not found'})
 
             def do_POST(self):
+                try:
+                    self._do_POST_impl()
+                except ConnectionResetError:
+                    pass
+                except BrokenPipeError:
+                    pass
+                except Exception as e:
+                    logger.error('POST %s 未处理异常: %s', self.path, e)
+                    try:
+                        self._respond(500, {'ok': False, 'msg': str(e)})
+                    except Exception:
+                        pass
+
+            def _do_POST_impl(self):
                 p = urllib.parse.urlparse(self.path)
                 path = p.path
 
@@ -578,12 +608,42 @@ class BridgeHandler:
 
             def _api_get_feedback_logs(self):
                 try:
-                    from .constants import LOG_DIR
+                    from .constants import LOG_DIR, CRASH_LOG_DIR
                     logs = []
-                    if LOG_DIR.exists():
-                        for f in sorted(LOG_DIR.glob('*.log'), reverse=True)[:10]:
-                            logs.append({'name': f.name, 'size': f.stat().st_size})
+                    for log_dir in [LOG_DIR, CRASH_LOG_DIR]:
+                        if log_dir.exists():
+                            for f in sorted(log_dir.glob('*.log'), reverse=True)[:20]:
+                                logs.append({'name': f.name, 'size': f.stat().st_size,
+                                             'dir': str(log_dir.parent)})
                     self._respond(200, {'ok': True, 'logs': logs})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_read_log(self):
+                """读取指定日志文件内容（最近 500 行）"""
+                try:
+                    from .constants import LOG_DIR, CRASH_LOG_DIR
+                    qs = urllib.parse.parse_qs(p.qs)
+                    fname = qs.get('file', [''])[0]
+                    if not fname or '..' in fname or '/' in fname or '\\' in fname:
+                        self._respond(400, {'ok': False, 'msg': '非法文件名'})
+                        return
+                    for log_dir in [LOG_DIR, CRASH_LOG_DIR]:
+                        fpath = log_dir / fname
+                        if fpath.exists() and fpath.is_file():
+                            lines = fpath.read_text(encoding='utf-8',
+                                                    errors='replace').splitlines()
+                            # 返回最后 500 行
+                            tail = lines[-500:]
+                            content = '\n'.join(tail)
+                            self._respond(200, {
+                                'ok': True,
+                                'file': fname,
+                                'total_lines': len(lines),
+                                'content': content,
+                            })
+                            return
+                    self._respond(404, {'ok': False, 'msg': '文件不存在'})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
@@ -680,9 +740,7 @@ class BridgeHandler:
 
         try:
             self._http_server = ThreadingHTTPServer(('127.0.0.1', _BRIDGE_PORT), _Handler)
-            import threading
-            _thr = threading.Thread(target=self._http_server.serve_forever, daemon=True, name='bridge-http')
-            _thr.start()
+            self._http_server.daemon_threads = True
             logger.info('Bridge HTTP 服务已启动 (127.0.0.1:%d)', _BRIDGE_PORT)
         except OSError as e:
             logger.warning('Bridge HTTP 启动失败（端口被占用，跳过）: %s', e)
@@ -692,8 +750,52 @@ class BridgeHandler:
                 f'UsageTracker HTTP 服务启动失败，端口 {_BRIDGE_PORT} 可能被占用。\n\n'
                 f'请先关闭其他 UsageTracker 实例后重试。\n错误: {e}',
                 'UsageTracker - 启动失败',
-                0x40  # MB_ICONINFORMATION
+                0x40
             )
+            return
+
+        # HTTP 线程：带自动重启的 serve_forever
+        def _http_loop():
+            while not getattr(bridge, '_stop_event', None) or not bridge._stop_event.is_set():
+                try:
+                    bridge._http_alive.set()
+                    self._http_server.serve_forever()
+                except Exception as e:
+                    logger.error('HTTP serve_forever 异常: %s', e)
+                bridge._http_alive.clear()
+                if getattr(bridge, '_stop_event', None) and bridge._stop_event.is_set():
+                    break
+                # 等待并重启
+                import time
+                logger.warning('HTTP 服务停止，5 秒后重启...')
+                time.sleep(5)
+                try:
+                    # 创建新的 server 实例
+                    old_server = self._http_server
+                    self._http_server = ThreadingHTTPServer(
+                        ('127.0.0.1', _BRIDGE_PORT), _Handler)
+                    self._http_server.daemon_threads = True
+                    logger.info('HTTP 服务已重启')
+                except OSError as e2:
+                    logger.error('HTTP 重启失败: %s', e2)
+                    time.sleep(30)
+
+        import threading
+        _thr = threading.Thread(target=_http_loop, daemon=True, name='bridge-http')
+        _thr.start()
+
+        # 心跳日志（每 5 分钟检查一次 HTTP 存活状态）
+        def _heartbeat():
+            import time
+            while not getattr(bridge, '_stop_event', None) or not bridge._stop_event.is_set():
+                time.sleep(300)
+                if not bridge._http_alive.is_set():
+                    logger.warning('HTTP 服务已停止响应！')
+                else:
+                    logger.debug('HTTP 心跳正常')
+
+        _hb = threading.Thread(target=_heartbeat, daemon=True, name='bridge-hb')
+        _hb.start()
 
     def stop_polling(self) -> None:
         if self._stop_event:

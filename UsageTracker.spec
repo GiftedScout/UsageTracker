@@ -5,6 +5,13 @@ from pathlib import Path
 
 proj = Path(SPECPATH)
 
+# 显式收集 pystray（PyInstaller 经常漏掉纯 Python 包的后端模块）
+def collect_pkg(name):
+    from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+    return (collect_submodules(name), collect_data_files(name))
+
+_pystray_modules, _pystray_data = collect_pkg('pystray')
+
 a = Analysis(
     ['src/main.py'],
     pathex=[str(proj / 'src')],
@@ -17,11 +24,14 @@ a = Analysis(
         (str(proj / 'assets' / 'logo.png'), 'assets'),
         (str(proj / 'locales'), 'locales'),
         (str(proj / 'ui' / 'web'), 'ui/web'),
-    ],
-    hiddenimports=['psutil', 'pystray', 'PIL', 'tkinter', 'tkinter.ttk', 'tkinter.messagebox', 'tkinter.filedialog', 'tkinter.simpledialog', 'ui.styled_widgets', 'ui.settings_window', 'ui.onboarding', 'ui.tab_general', 'ui.tab_categories', 'ui.tab_browsers', 'ui.tab_games', 'ui.tab_ignore', 'ui.tab_database', 'ui.tab_feedback'],
+    ] + _pystray_data,
+    hiddenimports=[
+        'psutil', 'pystray', 'pystray._win32', 'pystray._win32_common',
+        'PIL', 'PIL.Image', 'PIL.ImageDraw',
+    ] + _pystray_modules,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(proj / 'hook-pystray.py')],
     excludes=[],
     noarchive=False,
     optimize=0,

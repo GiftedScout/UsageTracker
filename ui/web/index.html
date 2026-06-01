@@ -27,6 +27,8 @@
         .modal-item .proc-name { font-weight: 500; }
         .modal-item .proc-path { color: var(--text-secondary); font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .modal-close { margin-top: 10px; width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); cursor: pointer; font-size: 13px; }
+        .clickable { cursor: pointer; }
+        .clickable:hover { background: var(--nav-hover-bg, rgba(255,255,255,0.05)); }
     </style>
 </head>
 <body>
@@ -244,7 +246,10 @@
                 </div>
                 <div class="card">
                     <h3 data-i18n="feedback.logs_title">崩溃日志</h3>
+                    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;" data-i18n="feedback.logs_hint">点击日志文件查看内容</p>
                     <div id="crash-logs-list"></div>
+                    <div id="log-info" style="font-size:12px;color:var(--text-secondary);margin-top:8px;"></div>
+                    <pre id="log-content" style="display:none;margin-top:8px;padding:12px;background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--text-primary);font-family:monospace;"></pre>
                 </div>
             </section>
         </main>

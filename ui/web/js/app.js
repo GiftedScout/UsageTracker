@@ -66,7 +66,7 @@ const I18N = {
         'feedback.contact_label': '联系方式（可选）',
         'feedback.contact_placeholder': '邮箱或微信',
         'feedback.submit': '提交反馈', 'feedback.logs_title': '崩溃日志',
-        'feedback.no_logs': '暂无日志',
+        'feedback.no_logs': '暂无日志', 'feedback.logs_hint': '点击日志文件查看内容',
         'process_picker.title': '选择进程', 'process_picker.search': '搜索进程名称...',
         'process_picker.close': '取消',
         'toast.saved': '设置已保存', 'toast.added': '已添加',
@@ -121,7 +121,7 @@ const I18N = {
         'feedback.contact_label': 'Contact (optional)',
         'feedback.contact_placeholder': 'Email or WeChat',
         'feedback.submit': 'Submit Feedback', 'feedback.logs_title': 'Crash Logs',
-        'feedback.no_logs': 'No logs',
+        'feedback.no_logs': 'No logs', 'feedback.logs_hint': 'Click a log file to view its content',
         'process_picker.title': 'Select Process',
         'process_picker.search': 'Search process name...',
         'process_picker.close': 'Cancel',
@@ -798,6 +798,8 @@ if (btnBackupDb) {
 }
 
 /* ---- Feedback ---- */
+let _currentLogFile = null;
+
 async function loadCrashLogs() {
     try {
         const data = await API.get('/api/feedback/logs');
@@ -808,18 +810,46 @@ async function loadCrashLogs() {
         const logs = data.logs || [];
         if (logs.length === 0) {
             list.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;">${t('feedback.no_logs')}</p>`;
+            return;
         }
         logs.forEach(log => {
             const div = document.createElement('div');
-            div.className = 'app-item';
+            div.className = 'app-item clickable';
+            const sizeStr = log.size > 1024 ? Math.round(log.size / 1024) + ' KB' : log.size + ' B';
             div.innerHTML = `
                 <span class="app-name">${log.name}</span>
-                <span class="app-path">${Math.round(log.size / 1024)} KB</span>
+                <span class="app-path">${sizeStr}</span>
             `;
+            div.addEventListener('click', () => {
+                _currentLogFile = log.name;
+                // Highlight selected
+                list.querySelectorAll('.app-item').forEach(el => el.style.background = '');
+                div.style.background = 'var(--accent-dim, rgba(30,144,255,0.1))';
+                readLogFile(log.name);
+            });
             list.appendChild(div);
         });
     } catch (e) {
         console.error('[loadCrashLogs] error:', e);
+    }
+}
+
+async function readLogFile(filename) {
+    const logContent = document.getElementById('log-content');
+    const logInfo = document.getElementById('log-info');
+    if (!logContent) return;
+    try {
+        const data = await API.get(`/api/feedback/logs/read?file=${encodeURIComponent(filename)}`);
+        if (!data || !data.ok) {
+            logContent.textContent = 'Failed to read log';
+            return;
+        }
+        if (logInfo) logInfo.textContent = `${filename} (${data.total_lines} lines, showing last ${data.content.split('\n').length})`;
+        logContent.textContent = data.content;
+        logContent.style.display = 'block';
+    } catch (e) {
+        logContent.textContent = 'Error: ' + e.message;
+        logContent.style.display = 'block';
     }
 }
 
