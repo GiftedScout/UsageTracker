@@ -120,6 +120,7 @@ class BridgeHandler:
     # ── HTTP 服务（扩展：设置页面 + API） ─────────
 
     def start_http_server(self, config_manager=None, data_store=None, exe_path: str = ''):
+        import threading
         self._config_manager = config_manager
         self._data_store = data_store
         self._exe_path = exe_path
@@ -782,7 +783,6 @@ class BridgeHandler:
                     logger.error('HTTP 重启失败（端口冲突），30 秒后重试: %s', e2)
                     time.sleep(30)
 
-        import threading
         _thr = threading.Thread(target=_http_loop, daemon=True, name='bridge-http')
         _thr.start()
 
