@@ -36,6 +36,7 @@ class BridgeHandler:
         self._http_server = None
         self._config_manager = None
         self._data_store = None
+        self._exe_path = ''
 
     # ── ignore 处理（复用） ──────────────────────────────
 
@@ -118,9 +119,10 @@ class BridgeHandler:
 
     # ── HTTP 服务（扩展：设置页面 + API） ─────────
 
-    def start_http_server(self, config_manager=None, data_store=None):
+    def start_http_server(self, config_manager=None, data_store=None, exe_path: str = ''):
         self._config_manager = config_manager
         self._data_store = data_store
+        self._exe_path = exe_path
         bridge = self
 
         class _Handler(BaseHTTPRequestHandler):
@@ -173,6 +175,13 @@ class BridgeHandler:
                 # API: 检查更新
                 if path == '/api/check-update':
                     return self._api_check_update()
+
+                # API: 健康检查
+                if path == '/api/health':
+                    return self._respond(200, {
+                        'ok': True,
+                        'timestamp': __import__('datetime').datetime.now().isoformat(),
+                    })
 
                 self._respond(404, {'ok': False, 'msg': 'Not found'})
 
@@ -309,6 +318,8 @@ class BridgeHandler:
                         'theme': cfg.get('theme', 'fairy_tale'),
                         'web_theme': cfg.get('web_theme', 'fairy'),
                         'version': cfg.get('version', ''),
+                        'first_run': cfg.get('first_run', True),
+                        'privacy_accepted': cfg.get('privacy_accepted', False),
                     }
                     self._respond(200, data)
                 except Exception as e:
@@ -329,11 +340,25 @@ class BridgeHandler:
                         'theme', 'web_theme',
                         'first_run', 'privacy_accepted',
                     }
+                    side_effects = []
                     for key in allowed:
                         if key in body:
                             cfg.set(key, body[key])
+                            # auto_start side effect: 立即启用/禁用开机启动
+                            if key == 'auto_start' and bridge._exe_path:
+                                from .startup_manager import StartupManager
+                                sm = StartupManager(exe_path=bridge._exe_path)
+                                if body[key]:
+                                    ok = sm.enable_startup()
+                                    side_effects.append(f'开机启动{"已启用" if ok else "启用失败"}')
+                                else:
+                                    ok = sm.disable_startup()
+                                    side_effects.append(f'开机启动{"已禁用" if ok else "禁用失败"}')
                     cfg.save()
-                    self._respond(200, {'ok': True, 'msg': '配置已保存'})
+                    msg = '配置已保存'
+                    if side_effects:
+                        msg += ' (' + '; '.join(side_effects) + ')'
+                    self._respond(200, {'ok': True, 'msg': msg})
                 except Exception as e:
                     logger.error('API /config POST 失败: %s', e)
                     self._respond(500, {'ok': False, 'msg': str(e)})
@@ -359,31 +384,34 @@ class BridgeHandler:
                         name = body.get('name', '')
                         color = body.get('color', '#0078D4')
                         if cfg and cid and name:
-                            cfg.add_custom_category(cid, name, color)
-                            self._respond(200, {'ok': True})
+                            ok = cfg.add_custom_category(cid, name, color)
+                            if ok:
+                                self._respond(200, {'ok': True, 'msg': '分类已添加'})
+                            else:
+                                self._respond(200, {'ok': False, 'msg': '分类 ID 或名称已存在'})
                         else:
                             self._respond(400, {'ok': False, 'msg': '参数不完整'})
                     elif action == 'remove_category':
                         cid = body.get('id', '')
                         if cfg and cid:
-                            cfg.remove_custom_category(cid)
-                            self._respond(200, {'ok': True})
+                            ok = cfg.remove_custom_category(cid)
+                            self._respond(200, {'ok': ok, 'msg': '分类已删除' if ok else '分类不存在'})
                         else:
                             self._respond(400, {'ok': False, 'msg': '缺少 id'})
                     elif action == 'add_app':
                         cid = body.get('id', '')
                         exe = body.get('exe_path', '')
                         if cfg and cid and exe:
-                            cfg.add_app_to_category(cid, exe)
-                            self._respond(200, {'ok': True})
+                            ok = cfg.add_app_to_category(cid, exe)
+                            self._respond(200, {'ok': ok, 'msg': '应用已添加' if ok else '应用已在分类中'})
                         else:
                             self._respond(400, {'ok': False, 'msg': '参数不完整'})
                     elif action == 'remove_app':
                         cid = body.get('id', '')
                         exe = body.get('exe_path', '')
                         if cfg and cid and exe:
-                            cfg.remove_app_from_category(cid, exe)
-                            self._respond(200, {'ok': True})
+                            ok = cfg.remove_app_from_category(cid, exe)
+                            self._respond(200, {'ok': ok, 'msg': '应用已移除' if ok else '应用不在分类中'})
                         else:
                             self._respond(400, {'ok': False, 'msg': '参数不完整'})
                     else:

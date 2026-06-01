@@ -141,7 +141,7 @@ def _run_app():
 
     # Bridge 通信（HTTP + 文件轮询）
     bridge = BridgeHandler()
-    bridge.start_http_server(config_manager=config, data_store=data_store)
+    bridge.start_http_server(config_manager=config, data_store=data_store, exe_path=_exe_path)
     bridge.start_polling(config_manager=config, data_store=data_store)
 
     # 首次运行：Bridge 启动后打开引导页

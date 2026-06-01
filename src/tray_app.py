@@ -1,12 +1,14 @@
-"""
+﻿"""
 系统托盘应用
 - pystray 托盘图标和右键菜单
 - 左键打开设置，双击打开日报
 - Tooltip 每 30 秒刷新
+- v0.3.0+ 已弃用 tkinter，全部改用 webbrowser / ctypes MessageBox
 """
 
 import logging
 import threading
+import ctypes
 from datetime import date, timedelta
 from typing import Callable
 
@@ -19,19 +21,29 @@ from .i18n import t
 logger = logging.getLogger(__name__)
 
 
+def _message_box(title: str, text: str, style: int = 0x40) -> int:
+    """系统消息框（替代 tkinter，避免 venv 中 Tcl/Tk 缺失导致崩溃）"""
+    try:
+        return ctypes.windll.user32.MessageBoxW(0, text, title, style)
+    except Exception as e:
+        logger.error('MessageBox fail: %s', e)
+        return 0
+
+
 class TrayApp:
     """系统托盘应用"""
 
     def __init__(self, icon_image: Image.Image, data_store=None,
                  config_manager=None, report_generator=None,
-                 on_settings=None, on_quit=None):
+                 on_settings=None, on_quit=None, exe_path: str = ''):
         self._data_store = data_store
         self._config = config_manager
         self._report_gen = report_generator
         self._on_settings = on_settings
         self._on_quit = on_quit
+        self._exe_path = exe_path
         self._stop_event = threading.Event()
-        self._auto_open_daily = False  # 托盘就绪后自动弹出昨日报告
+        self._auto_open_daily = False
 
         self.icon = pystray.Icon(
             name=APP_NAME,
@@ -45,7 +57,7 @@ class TrayApp:
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(t('tray.settings'), self._open_settings, default=True),
                 pystray.MenuItem(t('tray.check_update'), self._check_update),
-                pystray.MenuItem(f'{t("tray.about")} ({VERSION})', self._show_about),
+                pystray.MenuItem(f"{t('tray.about')} ({VERSION})", self._show_about),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(t('tray.exit'), self._quit),
             ),
@@ -68,80 +80,23 @@ class TrayApp:
                          daemon=True, name='open-monthly').start()
 
     def _open_custom(self, icon=None, item=None) -> None:
-        """自定义时间范围报告"""
         self._update_tooltip()
-        threading.Thread(target=self._show_custom_dialog,
-                         daemon=True, name='open-custom').start()
-
-    def _show_custom_dialog(self):
-        """弹出日期选择对话框"""
-        import tkinter as tk
-        from tkinter import simpledialog, messagebox
-        from datetime import datetime
-
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes('-topmost', True)
-
-        start_str = simpledialog.askstring(
-            t('tray.custom_report'),
-            t('tray.custom_start'),
-            parent=root)
-        if not start_str:
-            root.destroy()
-            return
-
-        end_str = simpledialog.askstring(
-            t('tray.custom_report'),
-            t('tray.custom_end'),
-            parent=root)
-        if not end_str:
-            root.destroy()
-            return
-
-        root.destroy()
-
-        # Validate dates
-        try:
-            start = datetime.strptime(start_str, '%Y-%m-%d').date()
-            end = datetime.strptime(end_str, '%Y-%m-%d').date()
-        except ValueError:
-            messagebox.showerror(t('dialog.error'),
-                                t('database.date_format_error'))
-            return
-
-        if start > end:
-            messagebox.showerror(t('dialog.error'),
-                                t('tray.custom_invalid'))
-            return
-
-        # Generate report for this range
-        if self._report_gen and self._data_store:
-            theme = self._config.theme if self._config else 'fairy_tale'
-            path = self._report_gen.generate_weekly_report(
-                start.isoformat(), end.isoformat(), theme)
-            self._report_gen.open_report(path)
+        import webbrowser
+        webbrowser.open('http://127.0.0.1:19234/settings')
 
     def _get_report_date(self) -> str:
-        """确定日报日期：优先昨天，若昨天无数据则回溯到最近有数据的日期"""
         if not self._data_store:
             return (date.today() - timedelta(days=1)).isoformat()
-
         today = date.today()
-        # 先查昨天
         yesterday = today - timedelta(days=1)
         report = self._data_store.get_daily_report(yesterday.isoformat())
         if report:
             return yesterday.isoformat()
-
-        # 回溯最多 7 天，找最近有数据的日期
         for i in range(2, 8):
             d = today - timedelta(days=i)
             report = self._data_store.get_daily_report(d.isoformat())
             if report:
                 return d.isoformat()
-
-        # 全都没有，回退到昨天（会提示无数据）
         return yesterday.isoformat()
 
     def _generate_and_open(self, report_type: str) -> None:
@@ -156,7 +111,7 @@ class TrayApp:
                     path = self._report_gen.generate_daily_report(report, theme)
                     self._report_gen.open_report(path)
                 else:
-                    logger.info('没有日报数据')
+                    logger.info('no daily data')
                     self._notify_no_data(t('tray.no_data'))
                 return
             elif report_type == 'weekly':
@@ -173,91 +128,38 @@ class TrayApp:
                 return
             self._report_gen.open_report(path)
         except Exception as e:
-            logger.error('生成报告失败: %s', e)
+            logger.error('report gen fail: %s', e)
 
     def _open_settings(self, icon=None, item=None) -> None:
-        logger.info('托盘：打开网页端设置')
+        logger.info('tray: open settings')
         import webbrowser
         try:
             webbrowser.open('http://127.0.0.1:19234/settings')
         except Exception as e:
-            logger.error('打开网页设置失败: %s', e)
+            logger.error('open settings fail: %s', e)
 
     def _check_update(self, icon=None, item=None) -> None:
-        """手动检查更新"""
         from .updater import check_update_async
         from .version import VERSION as _VER
-        import tkinter as tk
-        from tkinter import messagebox
-
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes('-topmost', True)
 
         def _on_result(info):
-            nonlocal root
             if info:
-                from src.i18n import t as _t
-                msg = _t('updater.found', version=info['version'])
-                result = messagebox.askyesno(
-                    _t('updater.title'), msg, parent=root)
-                if result:
-                    import webbrowser
-                    webbrowser.open(info['url'])
+                ver = info.get('version', '')
+                msg = '发现新版本 ' + ver + '！\n\n点击确定前往 GitHub 下载页面。'
+                _message_box('UsageTracker - 更新', msg, 0x40 | 0x1)
+                import webbrowser
+                webbrowser.open(info.get('url', 'https://github.com/GiftedScout/UsageTracker/releases'))
             else:
-                from src.i18n import t as _t
-                messagebox.showinfo(
-                    _t('updater.title'),
-                    _t('updater.latest'),
-                    parent=root)
-            root.destroy()
+                _message_box('UsageTracker - 更新', '当前已是最新版本。', 0x40)
 
-        check_update_async(_VER, callback=_on_result, force=True)
+        threading.Thread(
+            target=lambda: check_update_async(_VER, callback=_on_result, force=True),
+            daemon=True, name='check-update'
+        ).start()
 
     def _show_about(self, icon=None, item=None) -> None:
-        """弹出关于窗口，显示当前版本更新日志"""
-        def _run():
-            import tkinter as tk
-            from tkinter import ttk
-            import webbrowser
-            root = tk.Tk()
-            root.title(f'{t("tray.about")} {APP_NAME}')
-            root.resizable(False, False)
-            root.wm_attributes('-topmost', True)
-
-            # 标题
-            ttk.Label(root, text=f'{APP_NAME}  v{VERSION}',
-                      font=('', 14, 'bold')).pack(padx=20, pady=(16, 8))
-
-            # 更新日志
-            frame = ttk.Frame(root)
-            frame.pack(fill='both', expand=True, padx=20, pady=4)
-            txt = tk.Text(frame, width=52, height=14, wrap='word',
-                          relief='flat', bg=root.cget('bg'), state='normal',
-                          font=('', 9))
-            txt.insert('1.0', RELEASE_NOTES)
-            txt.config(state='disabled')
-            txt.pack(fill='both', expand=True)
-
-            # 按钮区
-            btn_frame = ttk.Frame(root)
-            btn_frame.pack(pady=(4, 16))
-            ttk.Button(btn_frame, text='查看 GitHub 主页',
-                       command=lambda: webbrowser.open(
-                           'https://github.com/GiftedScout/UsageTracker')
-                       ).pack(side='left', padx=8)
-            ttk.Button(btn_frame, text='关闭',
-                       command=root.destroy).pack(side='left', padx=8)
-
-            # 居中
-            root.update_idletasks()
-            w, h = root.winfo_reqwidth(), root.winfo_reqheight()
-            x = (root.winfo_screenwidth() - w) // 2
-            y = (root.winfo_screenheight() - h) // 2
-            root.geometry(f'{w}x{h}+{x}+{y}')
-            root.mainloop()
-
-        threading.Thread(target=_run, daemon=True, name='about-window').start()
+        import webbrowser
+        webbrowser.open('https://github.com/GiftedScout/UsageTracker/releases')
 
     def _quit(self, icon=None, item=None) -> None:
         self._stop_event.set()
@@ -266,7 +168,6 @@ class TrayApp:
             self._on_quit()
 
     def _update_tooltip(self) -> None:
-        """更新托盘悬浮提示（必须在主线程调用，否则 Shell_NotifyIcon 会崩溃）"""
         try:
             if self._data_store:
                 report = self._data_store.get_daily_report(
@@ -275,18 +176,15 @@ class TrayApp:
                     from .data_store import DataStore
                     b = DataStore.format_duration(report.browser_seconds)
                     g = DataStore.format_duration(report.game_seconds)
-                    self.icon.title = f'UsageTracker | {t("tray.tooltip_yesterday", browser=b, game=g)}'
+                    self.icon.title = f"UsageTracker | {t('tray.tooltip_yesterday', browser=b, game=g)}"
                 else:
-                    self.icon.title = f'{APP_NAME} | {t("tray.tooltip_no_data")}'
+                    self.icon.title = f"{APP_NAME} | {t('tray.tooltip_no_data')}"
         except Exception as e:
-            logger.debug('更新 tooltip 失败: %s', e)
+            logger.debug('tooltip update fail: %s', e)
 
     def run(self) -> None:
-        """启动托盘图标（阻塞）"""
         self._stop_event.clear()
-        # 首次更新 tooltip（在主线程，安全）
         self._update_tooltip()
-        # 自动弹日报：等托盘就绪（icon.run 启动后 1 秒桌面已渲染）
         if self._auto_open_daily:
             def _auto_report():
                 self._stop_event.wait(1)
@@ -296,17 +194,7 @@ class TrayApp:
         self.icon.run()
 
     def _notify_no_data(self, message: str) -> None:
-        """无报告数据时弹窗提示（兜底用 tkinter，比 Toast 可靠）"""
-        try:
-            import tkinter as tk
-            from tkinter import messagebox
-            _root = tk.Tk()
-            _root.withdraw()
-            _root.wm_attributes('-topmost', True)
-            messagebox.showinfo('UsageTracker', message, parent=_root)
-            _root.destroy()
-        except Exception as e:
-            logger.debug('无数据提示失败: %s', e)
+        _message_box('UsageTracker', message, 0x40)
 
     def stop(self) -> None:
         self._stop_event.set()

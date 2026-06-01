@@ -31,8 +31,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
     'privacy_accepted': False,
     'browsers': [],
     'game_dirs': [],
-    'ignored_apps': [],
-    'custom_categories': [],
+    'ignored_apps': [
+        # 默认忽略 Windows 系统进程（避免计入使用时长）
+        {'exe_path': 'explorer.exe', 'app_name': 'Windows 资源管理器', 'ignored_at': ''},
+        {'exe_path': 'SearchHost.exe', 'app_name': 'Windows 搜索', 'ignored_at': ''},
+        {'exe_path': 'ShellExperienceHost.exe', 'app_name': 'Windows Shell', 'ignored_at': ''},
+        {'exe_path': 'TextInputHost.exe', 'app_name': 'Windows 输入法', 'ignored_at': ''},
+        {'exe_path': 'RuntimeBroker.exe', 'app_name': 'Runtime Broker', 'ignored_at': ''},
+        {'exe_path': 'StartMenuExperienceHost.exe', 'app_name': '开始菜单', 'ignored_at': ''},
+    ],
+    'custom_categories': [
+        # 默认提供一个常用分类示例
+        {'id': 'browser', 'name': '浏览器', 'color': '#0078D4', 'apps': []},
+    ],
     'ui_mode': 'rich',  # 'simple' or 'rich'
     'first_run': True,  # Installation first run flag
     'detection_mode': 'auto',  # 'auto', 'event', 'polling'
