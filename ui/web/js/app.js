@@ -381,7 +381,6 @@ if (btnSaveGeneral) {
             language: newLang,
             auto_start: document.getElementById('cfg-auto-start').checked,
             auto_show_daily_report: document.getElementById('cfg-auto-report').checked,
-            detection_mode: document.getElementById('cfg-detection-mode').value,
             check_update: document.getElementById('cfg-check-update').checked,
             web_theme: document.getElementById('cfg-web-theme').value,
         };
@@ -396,6 +395,9 @@ if (btnSaveGeneral) {
                     applyLanguage(newLang);
                 }
                 applyTheme(body.web_theme);
+                // detection_mode always forced to polling
+                const modeEl = document.getElementById('cfg-detection-mode');
+                if (modeEl) modeEl.value = 'polling';
             } else {
                 toast('❌ ' + (data ? data.msg : 'Save failed'));
             }
@@ -441,7 +443,6 @@ async function loadCategories() {
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${cat.color || '#0078D4'};"></span>
                     <span class="app-name">${cat.name || cat.id}</span>
-                    <span class="app-path" style="color:var(--accent)">${cat.id}</span>
                 </div>
                 <button class="btn-small" data-id="${cat.id}">删除</button>
             `;
@@ -459,7 +460,7 @@ async function loadCategories() {
             cats.forEach(cat => {
                 const opt = document.createElement('option');
                 opt.value = cat.id;
-                opt.textContent = `${cat.name || cat.id} (${cat.id})`;
+                opt.textContent = cat.name || cat.id;
                 sel.appendChild(opt);
             });
             if (oldVal) {
@@ -524,6 +525,19 @@ if (btnAddCategory) {
             }
         } catch (e) {
             toast('❌ ' + e.message);
+        }
+    });
+}
+
+// 分类选择器 change 事件：切换分类时刷新应用列表
+const categorySelector = document.getElementById('category-selector');
+if (categorySelector) {
+    categorySelector.addEventListener('change', () => {
+        if (categorySelector.value) {
+            loadCategoryApps(categorySelector.value);
+        } else {
+            const list = document.getElementById('category-apps-list');
+            if (list) list.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;">${t('categories.no_apps')}</p>`;
         }
     });
 }
@@ -629,23 +643,17 @@ async function loadGameDirs() {
             });
             list.appendChild(div);
         });
-        // Show auto-detected games
+        // Show auto-detected games (from classifier, not steamapps path filter)
         const detectedEl = document.getElementById('detected-games');
         if (detectedEl) {
             try {
-                const procData = await API.get('/api/processes');
-                if (procData && procData.ok) {
-                    const steamExes = procData.processes.filter(p =>
-                        p.exe_path.toLowerCase().includes('steamapps') ||
-                        p.name.toLowerCase().startsWith('steam')
-                    );
-                    if (steamExes.length > 0) {
-                        detectedEl.innerHTML = `<strong>${t('games.auto_label')}</strong><br>` +
-                            steamExes.slice(0, 5).map(p => `${p.name}`).join(', ');
-                        detectedEl.style.display = 'block';
-                    } else {
-                        detectedEl.style.display = 'none';
-                    }
+                const classData = await API.get('/api/classifier-games');
+                if (classData && classData.ok && classData.games && classData.games.length > 0) {
+                    detectedEl.innerHTML = `<strong>${t('games.auto_label')}</strong><br>` +
+                        classData.games.map(g => `${g.name} (${g.exe})`).join(', ');
+                    detectedEl.style.display = 'block';
+                } else {
+                    detectedEl.style.display = 'none';
                 }
             } catch (e) { /* silent */ }
         }
@@ -862,7 +870,7 @@ if (btnSubmitFeedback) {
         try {
             const data = await API.post('/api/feedback', { description: desc, contact });
             if (data && data.ok) {
-                toast('✅ ' + t('feedback.submit'));
+                toast('✅ ' + (data.msg || t('feedback.submit')));
                 document.getElementById('feedback-desc').value = '';
                 document.getElementById('feedback-contact').value = '';
             } else {

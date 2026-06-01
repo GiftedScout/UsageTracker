@@ -204,6 +204,10 @@ class BridgeHandler:
                 if path == '/api/processes':
                     return self._api_get_processes()
 
+                # API: 分类器识别的游戏列表（供游戏页面显示）
+                if path == '/api/classifier-games':
+                    return self._api_get_classifier_games()
+
                 self._respond(404, {'ok': False, 'msg': 'Not found'})
 
             def do_POST(self):
@@ -376,9 +380,12 @@ class BridgeHandler:
                         'first_run', 'privacy_accepted',
                     }
                     side_effects = []
+                    changes = []
                     for key in allowed:
                         if key in body:
+                            old_val = cfg.get(key)
                             cfg.set(key, body[key])
+                            changes.append(f'{key}: {old_val} -> {body[key]}')
                             # auto_start side effect: 立即启用/禁用开机启动
                             if key == 'auto_start' and bridge._exe_path:
                                 from .startup_manager import StartupManager
@@ -391,6 +398,13 @@ class BridgeHandler:
                                     side_effects.append(f'开机启动{"已禁用" if ok else "禁用失败"}')
                     cfg.save()
                     msg = '配置已保存'
+                    if changes:
+                        logger.info('配置变更: %s', '; '.join(changes))
+                    # detection_mode 强制 polling（v0.3.0 修复 segfault）
+                    if 'detection_mode' in body and body['detection_mode'] != 'polling':
+                        cfg.set('detection_mode', 'polling')
+                        cfg.save()
+                        msg += '（检测模式已固定为轮询，避免兼容性问题）'
                     if side_effects:
                         msg += ' (' + '; '.join(side_effects) + ')'
                     self._respond(200, {'ok': True, 'msg': msg})
@@ -609,13 +623,15 @@ class BridgeHandler:
 
             def _api_get_feedback_logs(self):
                 try:
-                    from .constants import LOG_DIR, CRASH_LOG_DIR
+                    from .constants import LOG_DIR
                     logs = []
-                    for log_dir in [LOG_DIR, CRASH_LOG_DIR]:
-                        if log_dir.exists():
-                            for f in sorted(log_dir.glob('*.log'), reverse=True)[:20]:
+                    seen = set()
+                    if LOG_DIR.exists():
+                        for f in sorted(LOG_DIR.glob('*.log'), reverse=True)[:20]:
+                            if f.name not in seen:
+                                seen.add(f.name)
                                 logs.append({'name': f.name, 'size': f.stat().st_size,
-                                             'dir': str(log_dir.parent)})
+                                             'dir': str(LOG_DIR)})
                     self._respond(200, {'ok': True, 'logs': logs})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
@@ -623,29 +639,26 @@ class BridgeHandler:
             def _api_read_log(self):
                 """读取指定日志文件内容（最近 500 行）"""
                 try:
-                    from .constants import LOG_DIR, CRASH_LOG_DIR
-                    # 从 self.path 解析 query string
+                    from .constants import LOG_DIR
                     _p = urllib.parse.urlparse(self.path)
                     qs = urllib.parse.parse_qs(_p.query)
                     fname = qs.get('file', [''])[0]
                     if not fname or '..' in fname or '/' in fname or '\\' in fname:
                         self._respond(400, {'ok': False, 'msg': '非法文件名'})
                         return
-                    for log_dir in [LOG_DIR, CRASH_LOG_DIR]:
-                        fpath = log_dir / fname
-                        if fpath.exists() and fpath.is_file():
-                            lines = fpath.read_text(encoding='utf-8',
-                                                    errors='replace').splitlines()
-                            # 返回最后 500 行
-                            tail = lines[-500:]
-                            content = '\n'.join(tail)
-                            self._respond(200, {
-                                'ok': True,
-                                'file': fname,
-                                'total_lines': len(lines),
-                                'content': content,
-                            })
-                            return
+                    fpath = LOG_DIR / fname
+                    if fpath.exists() and fpath.is_file():
+                        lines = fpath.read_text(encoding='utf-8',
+                                                errors='replace').splitlines()
+                        tail = lines[-500:]
+                        content = '\n'.join(tail)
+                        self._respond(200, {
+                            'ok': True,
+                            'file': fname,
+                            'total_lines': len(lines),
+                            'content': content,
+                        })
+                        return
                     self._respond(404, {'ok': False, 'msg': '文件不存在'})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
@@ -687,7 +700,9 @@ class BridgeHandler:
                             'contact': contact,
                             'time': datetime.datetime.now().isoformat(),
                         }, f, ensure_ascii=False, indent=2)
-                    self._respond(200, {'ok': True, 'msg': '反馈已提交'})
+                    self._respond(200, {'ok': True,
+                                         'msg': f'反馈已保存到 feedback/{fname.name}',
+                                         'file': fname.name})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
@@ -737,7 +752,41 @@ class BridgeHandler:
                     logger.error('API /processes 失败: %s', e)
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
-            # ── 日志 ──
+            def _api_get_classifier_games(self):
+                """返回分类器已识别的游戏列表（排除启动器）"""
+                try:
+                    games = []
+                    if bridge._config_manager:
+                        # 尝试获取 app_classifier 实例
+                        from .app_classifier import AppClassifier
+                        # 直接从缓存和静态白名单构建游戏列表
+                        from .constants import STEAM_CACHE_PATH
+                        import json, os
+                        steam_games = {}
+                        extra_games = {}
+                        if os.path.exists(STEAM_CACHE_PATH):
+                            try:
+                                with open(STEAM_CACHE_PATH, 'r', encoding='utf-8') as f:
+                                    data = json.load(f)
+                                steam_games = data.get('games', {})
+                                if isinstance(steam_games, list):
+                                    steam_games = {e: e.replace('.exe', '') for e in steam_games}
+                                extra_games = data.get('extra_games', {})
+                            except Exception:
+                                pass
+                        from .app_classifier import KNOWN_GAMES, GAME_LAUNCHERS
+                        all_games = dict(steam_games)
+                        all_games.update(extra_games)
+                        all_games.update(KNOWN_GAMES)
+                        # 排除启动器
+                        for exe in GAME_LAUNCHERS:
+                            all_games.pop(exe, None)
+                        for exe, name in sorted(all_games.items(), key=lambda x: x[1]):
+                            games.append({'exe': exe, 'name': name})
+                    self._respond(200, {'ok': True, 'games': games})
+                except Exception as e:
+                    logger.error('API /classifier-games 失败: %s', e)
+                    self._respond(500, {'ok': False, 'msg': str(e)})
             def log_message(self, fmt, *args):
                 logger.debug('bridge-http: ' + fmt, *args)
 
