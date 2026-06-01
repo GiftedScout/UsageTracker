@@ -4,8 +4,8 @@
  */
 
 const API = {
-    get: (path) => fetch(`/api${path}`).then(r => r.json()),
-    post: (path, body) => fetch(`/api${path}`, {
+    get: (path) => fetch(`http://127.0.0.1:19234${path}`).then(r => r.json()),
+    post: (path, body) => fetch(`http://127.0.0.1:19234${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -15,6 +15,7 @@ const API = {
 /* ---- Toast ---- */
 function toast(msg, duration = 2500) {
     const el = document.getElementById('toast');
+    if (!el) return;
     el.textContent = msg;
     el.classList.remove('hidden');
     requestAnimationFrame(() => el.classList.add('show'));
@@ -50,19 +51,19 @@ const themeBtn = document.getElementById('btn-theme-switch');
 themeBtn.addEventListener('click', () => {
     currentTheme = currentTheme === 'fairy' ? 'geek' : 'fairy';
     applyTheme(currentTheme);
-    API.post('/config', { web_theme: currentTheme });
+    API.post('/api/config', { web_theme: currentTheme });
 });
 
 function applyTheme(theme) {
     const link = document.getElementById('theme-css');
-    link.href = `/static/css/${theme === 'geek' ? 'geek' : 'fairy-tale'}.css`;
-    themeBtn.textContent = theme === 'geek' ? '🖥️' : '🌸';
+    if (link) link.href = `/static/css/${theme === 'geek' ? 'geek' : 'fairy-tale'}.css`;
+    if (themeBtn) themeBtn.textContent = theme === 'geek' ? '🖥️' : '🧚';
 }
 
 /* ---- 通用设置 ---- */
 async function loadGeneralSettings() {
-    const data = await API.get('/config');
-    if (!data.ok) return;
+    const data = await API.get('/api/config');
+    if (!data || !data.ok) return;
     const langEl = document.getElementById('cfg-language');
     if (langEl) langEl.value = data.language || 'zh-CN';
     const autoStartEl = document.getElementById('cfg-auto-start');
@@ -90,14 +91,14 @@ document.getElementById('btn-save-general').addEventListener('click', async () =
         check_update: document.getElementById('cfg-check-update').checked,
         web_theme: document.getElementById('cfg-web-theme').value,
     };
-    const data = await API.post('/config', body);
-    toast(data.ok ? '✅ 设置已保存' : `❌ ${data.msg}`);
-    if (data.ok) applyTheme(body.web_theme);
+    const data = await API.post('/api/config', body);
+    toast(data && data.ok ? '✅ 设置已保存' : `❌ ${data ? data.msg : '通信失败'}`);
+    if (data && data.ok) applyTheme(body.web_theme);
 });
 
 document.getElementById('btn-check-update').addEventListener('click', async () => {
-    const data = await API.get('/check-update');
-    if (data.ok && data.update) {
+    const data = await API.get('/api/check-update');
+    if (data && data.ok && data.update) {
         toast(`发现新版本 ${data.update.version}，请前往 GitHub 下载`);
     } else {
         toast('已是最新版本');
@@ -106,8 +107,8 @@ document.getElementById('btn-check-update').addEventListener('click', async () =
 
 /* ---- 分类管理 ---- */
 async function loadCategories() {
-    const data = await API.get('/apps');
-    if (!data.ok) return;
+    const data = await API.get('/api/apps');
+    if (!data || !data.ok) return;
     const list = document.getElementById('custom-categories-list');
     if (!list) return;
     list.innerHTML = '';
@@ -122,7 +123,7 @@ async function loadCategories() {
             <button class="btn-small" data-id="${cat.id}">删除</button>
         `;
         div.querySelector('.btn-small').addEventListener('click', async () => {
-            await API.post('/apps', { action: 'remove_category', id: cat.id });
+            await API.post('/api/apps', { action: 'remove_category', id: cat.id });
             toast('分类已删除');
             loadCategories();
         });
@@ -143,21 +144,22 @@ async function loadCategories() {
 
 async function loadCategoryApps(catId) {
     if (!catId) return;
-    const data = await API.get('/apps');
+    const data = await API.get('/api/apps');
     const cat = (data.custom_categories || []).find(c => c.id === catId);
     const list = document.getElementById('category-apps-list');
     if (!list) return;
     list.innerHTML = '';
     if (!cat) return;
-    (cat.apps || []).forEach(exe => {
+    const apps = cat.apps || [];
+    apps.forEach(appPath => {
         const div = document.createElement('div');
         div.className = 'app-item';
         div.innerHTML = `
-            <span class="app-path">${exe}</span>
-            <button class="btn-small" data-cat="${catId}" data-exe="${exe}">移除</button>
+            <span class="app-path">${appPath}</span>
+            <button class="btn-small" data-app="${appPath}">移除</button>
         `;
         div.querySelector('.btn-small').addEventListener('click', async () => {
-            await API.post('/apps', { action: 'remove_app', id: catId, exe_path: exe });
+            await API.post('/api/apps', { action: 'remove_app', id: catId, exe_path: appPath });
             toast('应用已移除');
             loadCategoryApps(catId);
         });
@@ -165,71 +167,78 @@ async function loadCategoryApps(catId) {
     });
 }
 
-document.getElementById('category-selector')?.addEventListener('change', (e) => {
-    loadCategoryApps(e.target.value);
+document.getElementById('btn-add-category').addEventListener('click', async () => {
+    const id = document.getElementById('new-category-id').value.trim();
+    const name = document.getElementById('new-category-name').value.trim();
+    if (!id || !name) { toast('请填写分类 ID 和名称'); return; }
+    const color = document.getElementById('new-category-color').value || '#0078D4';
+    const data = await API.post('/api/apps', { action: 'add_category', id, name, color });
+    if (data && data.ok) {
+        toast('分类已添加');
+        document.getElementById('new-category-id').value = '';
+        document.getElementById('new-category-name').value = '';
+        loadCategories();
+    } else {
+        toast(`❌ ${data ? data.msg : '添加失败'}`);
+    }
 });
 
-document.getElementById('btn-add-category')?.addEventListener('click', async () => {
-    const id = prompt('分类 ID（英文，如 study）：');
-    if (!id) return;
-    const name = prompt('分类名称（如：学习）：');
-    if (!name) return;
-    await API.post('/apps', { action: 'add_category', id, name, color: '#0078D4' });
-    toast('分类已添加');
-    loadCategories();
+document.getElementById('btn-add-app-to-category').addEventListener('click', async () => {
+    const sel = document.getElementById('category-selector');
+    const exe = document.getElementById('new-app-path').value.trim();
+    if (!sel.value || !exe) { toast('请选择分类并填写应用路径'); return; }
+    const data = await API.post('/api/apps', { action: 'add_app', id: sel.value, exe_path: exe });
+    if (data && data.ok) {
+        toast('应用已添加');
+        document.getElementById('new-app-path').value = '';
+        loadCategoryApps(sel.value);
+    } else {
+        toast(`❌ ${data ? data.msg : '添加失败'}`);
+    }
 });
 
-document.getElementById('btn-add-app-to-category')?.addEventListener('click', async () => {
-    const catId = document.getElementById('category-selector')?.value;
-    if (!catId) { toast('请先选择分类'); return; }
-    const exe = prompt('应用 exe 路径：');
-    if (!exe) return;
-    await API.post('/apps', { action: 'add_app', id: catId, exe_path: exe });
-    toast('应用已添加');
-    loadCategoryApps(catId);
-});
-
-/* ---- 浏览器规则 ---- */
-async function loadBrowserRules() {
-    const data = await API.get('/browsers');
-    const list = document.getElementById('browser-rules-list');
+/* ---- 忽略名单 ---- */
+async function loadIgnoredApps() {
+    const data = await API.get('/api/ignore');
+    if (!data || !data.ok) return;
+    const list = document.getElementById('ignored-apps-list');
     if (!list) return;
     list.innerHTML = '';
-    (data.browsers || []).forEach((rule, idx) => {
+    (data.ignored_apps || []).forEach(item => {
         const div = document.createElement('div');
         div.className = 'app-item';
+        const exePath = typeof item === 'string' ? item : (item.exe_path || '');
+        const appName = typeof item === 'string' ? '' : (item.app_name || '');
         div.innerHTML = `
-            <div>
-                <span class="app-name">${rule.browser_exe || '*'}</span>
-                <span class="app-path">分类: ${rule.category || 'unknown'}</span>
-            </div>
-            <button class="btn-small" data-idx="${idx}">删除</button>
+            <span class="app-path">${exePath} ${appName ? '(' + appName + ')' : ''}</span>
+            <button class="btn-small" data-exe="${exePath}">移除</button>
         `;
         div.querySelector('.btn-small').addEventListener('click', async () => {
-            await API.post('/browsers', { action: 'remove_rule', index: idx });
-            toast('规则已删除');
-            loadBrowserRules();
+            await API.post('/api/ignore', { action: 'remove', exe_path: exePath });
+            toast('已从忽略名单移除');
+            loadIgnoredApps();
         });
         list.appendChild(div);
     });
 }
 
-document.getElementById('btn-add-browser-rule')?.addEventListener('click', async () => {
-    const browser_exe = prompt('浏览器 exe 名称（如 chrome.exe，留空匹配所有）：');
-    const url_pattern = prompt('URL 匹配模式（如 *youtube.com*）：');
-    const category = prompt('分类 ID（如 game、study）：');
-    if (!category) return;
-    await API.post('/browsers', {
-        action: 'add_rule',
-        rule: { browser_exe: browser_exe || '', url_pattern: url_pattern || '*', category: category || 'other' }
-    });
-    toast('规则已添加');
-    loadBrowserRules();
+document.getElementById('btn-add-ignore').addEventListener('click', async () => {
+    const exe = document.getElementById('new-ignore-path').value.trim();
+    if (!exe) { toast('请填写应用路径'); return; }
+    const data = await API.post('/api/ignore', { action: 'add', exe_path: exe });
+    if (data && data.ok) {
+        toast('已添加到忽略名单');
+        document.getElementById('new-ignore-path').value = '';
+        loadIgnoredApps();
+    } else {
+        toast(`❌ ${data ? data.msg : '添加失败'}`);
+    }
 });
 
 /* ---- 游戏目录 ---- */
 async function loadGameDirs() {
-    const data = await API.get('/games');
+    const data = await API.get('/api/games');
+    if (!data || !data.ok) return;
     const list = document.getElementById('game-dirs-list');
     if (!list) return;
     list.innerHTML = '';
@@ -241,7 +250,7 @@ async function loadGameDirs() {
             <button class="btn-small" data-dir="${d}">移除</button>
         `;
         div.querySelector('.btn-small').addEventListener('click', async () => {
-            await API.post('/games', { action: 'remove_dir', dir: d });
+            await API.post('/api/games', { action: 'remove_dir', dir: d });
             toast('目录已移除');
             loadGameDirs();
         });
@@ -249,75 +258,89 @@ async function loadGameDirs() {
     });
 }
 
-document.getElementById('btn-add-game-dir')?.addEventListener('click', async () => {
-    const d = prompt('游戏目录路径（如 D:\\Games\\Steam）：');
-    if (!d) return;
-    await API.post('/games', { action: 'add_dir', dir: d });
-    toast('目录已添加');
-    loadGameDirs();
+document.getElementById('btn-add-game-dir').addEventListener('click', async () => {
+    const d = document.getElementById('new-game-dir').value.trim();
+    if (!d) { toast('请填写游戏目录路径'); return; }
+    const data = await API.post('/api/games', { action: 'add_dir', dir: d });
+    if (data && data.ok) {
+        toast('游戏目录已添加');
+        document.getElementById('new-game-dir').value = '';
+        loadGameDirs();
+    } else {
+        toast(`❌ ${data ? data.msg : '添加失败'}`);
+    }
 });
 
-/* ---- 忽略列表 ---- */
-async function loadIgnoredApps() {
-    const data = await API.get('/ignore');
-    const list = document.getElementById('ignored-apps-list');
+/* ---- 浏览器规则 ---- */
+async function loadBrowserRules() {
+    const data = await API.get('/api/browsers');
+    if (!data || !data.ok) return;
+    const list = document.getElementById('browser-rules-list');
     if (!list) return;
     list.innerHTML = '';
-    (data.ignored_apps || []).forEach(item => {
+    (data.browsers || []).forEach((rule, idx) => {
         const div = document.createElement('div');
         div.className = 'app-item';
-        const exe = typeof item === 'string' ? item : (item.exe_path || '');
-        const name = typeof item === 'string' ? '' : (item.app_name || '');
         div.innerHTML = `
             <div>
-                <span class="app-path">${exe}</span>
-                ${name ? `<span class="app-name">${name}</span>` : ''}
+                <span class="app-name">${rule.name || '规则' + idx}</span>
+                <span class="app-path">exe: ${rule.exe_path || '*'} | url: ${rule.url_pattern || '*'}</span>
             </div>
-            <button class="btn-small" data-exe="${exe}">移除</button>
+            <button class="btn-small" data-idx="${idx}">删除</button>
         `;
         div.querySelector('.btn-small').addEventListener('click', async () => {
-            await API.post('/ignore', { action: 'remove', exe_path: exe });
-            toast('已取消忽略');
-            loadIgnoredApps();
+            await API.post('/api/browsers', { action: 'remove_rule', index: idx });
+            toast('规则已删除');
+            loadBrowserRules();
         });
         list.appendChild(div);
     });
 }
 
-document.getElementById('btn-add-ignore')?.addEventListener('click', async () => {
-    const exe = prompt('要忽略的应用 exe 路径：');
-    if (!exe) return;
-    await API.post('/ignore', { action: 'add', exe_path: exe });
-    toast('已添加到忽略列表');
-    loadIgnoredApps();
+document.getElementById('btn-add-browser-rule').addEventListener('click', async () => {
+    const name = document.getElementById('new-browser-name').value.trim();
+    const exe = document.getElementById('new-browser-exe').value.trim();
+    const url = document.getElementById('new-browser-url').value.trim();
+    if (!name) { toast('请填写规则名称'); return; }
+    const data = await API.post('/api/browsers', {
+        action: 'add_rule',
+        rule: { name, exe_path: exe, url_pattern: url }
+    });
+    if (data && data.ok) {
+        toast('浏览器规则已添加');
+        document.getElementById('new-browser-name').value = '';
+        document.getElementById('new-browser-exe').value = '';
+        document.getElementById('new-browser-url').value = '';
+        loadBrowserRules();
+    } else {
+        toast(`❌ ${data ? data.msg : '添加失败'}`);
+    }
 });
 
 /* ---- 数据库 ---- */
 async function loadDatabaseInfo() {
-    const data = await API.get('/database');
-    if (data.ok) {
-        const dbSize = document.getElementById('db-size');
-        const dbRecords = document.getElementById('db-records');
-        if (dbSize) dbSize.textContent = data.db_size_mb ?? '-';
-        if (dbRecords) dbRecords.textContent = data.record_count ?? '-';
-    }
+    const data = await API.get('/api/database');
+    if (!data || !data.ok) return;
+    const sizeEl = document.getElementById('db-size');
+    if (sizeEl) sizeEl.textContent = `${data.db_size_mb || 0} MB（${data.record_count || 0} 条记录）`;
 }
 
-document.getElementById('btn-backup-db')?.addEventListener('click', async () => {
-    const data = await API.post('/database', { action: 'backup' });
-    toast(data.ok ? `备份成功: ${data.backup_path}` : `备份失败: ${data.msg}`);
+document.getElementById('btn-cleanup-db').addEventListener('click', async () => {
+    const days = document.getElementById('cleanup-days').value || 90;
+    const data = await API.post('/api/database', { action: 'cleanup', days: parseInt(days) });
+    toast(data && data.ok ? `已清理 ${days} 天前数据` : `❌ ${data ? data.msg : '清理失败'}`);
+    loadDatabaseInfo();
 });
 
-document.getElementById('btn-cleanup-db')?.addEventListener('click', async () => {
-    if (!confirm('确定清理 90 天前的数据？此操作不可恢复。')) return;
-    const data = await API.post('/database', { action: 'cleanup', days: 90 });
-    toast(data.ok ? '清理完成' : `清理失败: ${data.msg}`);
-    loadDatabaseInfo();
+document.getElementById('btn-backup-db').addEventListener('click', async () => {
+    const data = await API.post('/api/database', { action: 'backup' });
+    toast(data && data.ok ? `备份成功: ${data.backup_path}` : `❌ ${data ? data.msg : '备份失败'}`);
 });
 
 /* ---- 反馈 ---- */
 async function loadCrashLogs() {
-    const data = await API.get('/feedback/logs');
+    const data = await API.get('/api/feedback/logs');
+    if (!data || !data.ok) return;
     const list = document.getElementById('crash-logs-list');
     if (!list) return;
     list.innerHTML = '';
@@ -326,29 +349,34 @@ async function loadCrashLogs() {
         div.className = 'app-item';
         div.innerHTML = `
             <span class="app-name">${log.name}</span>
-            <span class="app-path">${(log.size / 1024).toFixed(1)} KB</span>
+            <span class="app-path">${Math.round(log.size / 1024)} KB</span>
         `;
         list.appendChild(div);
     });
 }
 
-document.getElementById('btn-submit-feedback')?.addEventListener('click', async () => {
-    const desc = document.getElementById('feedback-desc')?.value?.trim();
+document.getElementById('btn-submit-feedback').addEventListener('click', async () => {
+    const desc = document.getElementById('feedback-desc').value.trim();
     if (!desc) { toast('请填写问题描述'); return; }
-    const contact = document.getElementById('feedback-contact')?.value?.trim() || '';
-    const data = await API.post('/feedback', { description: desc, contact });
-    if (data.ok) {
-        toast('反馈已提交，感谢！');
-        const descEl = document.getElementById('feedback-desc');
-        const contactEl = document.getElementById('feedback-contact');
-        if (descEl) descEl.value = '';
-        if (contactEl) contactEl.value = '';
+    const contact = document.getElementById('feedback-contact').value.trim();
+    const data = await API.post('/api/feedback', { description: desc, contact });
+    if (data && data.ok) {
+        toast('✅ 反馈已提交，感谢！');
+        document.getElementById('feedback-desc').value = '';
+        document.getElementById('feedback-contact').value = '';
     } else {
-        toast(`提交失败: ${data.msg}`);
+        toast(`❌ ${data ? data.msg : '提交失败'}`);
     }
 });
 
+/* ---- 引导页专用：开机自启写入 ---- */
+function setAutoStart(enable) {
+    // 开机自启由主程序管理，引导页只记录用户选择
+    // 实际写入在用户首次保存设置时由主程序完成
+    return Promise.resolve({ ok: true });
+}
+
 /* ---- 初始化 ---- */
-document.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', () => {
     loadGeneralSettings();
 });

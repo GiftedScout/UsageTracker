@@ -55,54 +55,6 @@ def _create_icon():
     return img
 
 
-def _show_privacy_dialog():
-    """首次启动时显示隐私声明对话框"""
-    import tkinter as tk
-    from tkinter import ttk
-    from src.config_manager import ConfigManager
-    from src.i18n import init as init_i18n, t
-
-    config = ConfigManager()
-    init_i18n(config.language)
-    if config.privacy_accepted:
-        return config
-
-    result = {'accepted': False}
-
-    root = tk.Tk()
-    root.title(t('privacy.title'))
-    root.geometry('420x280')
-    root.resizable(False, False)
-
-    root.withdraw()
-    root.update_idletasks()
-    x = (root.winfo_screenwidth() - 420) // 2
-    y = (root.winfo_screenheight() - 280) // 2
-    root.geometry(f'+{x}+{y}')
-    root.deiconify()
-
-    ttk.Label(root, text=t('privacy.title'), font=('', 14, 'bold')).pack(pady=(20, 10))
-    ttk.Label(root, text=t('privacy.content'),
-              wraplength=380, justify='center').pack(pady=10)
-
-    def on_accept():
-        config.privacy_accepted = True
-        config.save()
-        result['accepted'] = True
-        root.destroy()
-
-    def on_decline():
-        root.destroy()
-
-    btn_frame = ttk.Frame(root)
-    btn_frame.pack(pady=20)
-    ttk.Button(btn_frame, text=t('privacy.accept'), command=on_accept).pack(side='left', padx=8)
-    ttk.Button(btn_frame, text=t('privacy.decline'), command=on_decline).pack(side='left', padx=8)
-
-    root.mainloop()
-    return config if result['accepted'] else None
-
-
 def _get_exe_path():
     """获取可执行文件路径（用于启动管理）"""
     if getattr(sys, 'frozen', False):
@@ -137,22 +89,13 @@ def _run_app():
     config = ConfigManager()
 
     # 首次运行处理
+    # 用局部变量保存，供后续判断是否需要打开引导页
+    _need_onboarding = config.first_run or not config.privacy_accepted
+
     if config.first_run:
-        logger.info('首次运行，清除首次运行标志，引导页将在 Bridge 就绪后打开')
+        logger.info('首次运行，清除首次运行标志')
         config.first_run = False
-        # 隐私声明在首次运行时也要检查
-        if not config.privacy_accepted:
-            init_i18n(config.language)
-            if not _show_privacy_dialog():
-                logger.info('用户未接受隐私声明，退出')
-                return 0
         config.save()
-    else:
-        if not config.privacy_accepted:
-            init_i18n(config.language)
-            if not _show_privacy_dialog():
-                logger.info('用户未接受隐私声明，退出')
-                return 0
 
     init_i18n(config.language)
 
@@ -198,9 +141,7 @@ def _run_app():
     bridge.start_polling(config_manager=config, data_store=data_store)
 
     # 首次运行：Bridge 启动后打开引导页
-    if not config.first_run and not getattr(config, '_onboarding_shown', False):
-        # 首次运行标志已清除，但引导页还没显示
-        # 在 Bridge 就绪后打开（延迟 2 秒确保服务可用）
+    if _need_onboarding and not getattr(config, '_onboarding_shown', False):
         def _open_onboarding():
             import time
             time.sleep(2)
@@ -208,6 +149,7 @@ def _run_app():
             try:
                 webbrowser.open('http://127.0.0.1:19234/onboarding')
                 logger.info('已打开首次运行引导页')
+                config._onboarding_shown = True
             except Exception as e:
                 logger.error('打开引导页失败: %s', e)
         threading.Thread(target=_open_onboarding, daemon=True).start()
