@@ -133,7 +133,7 @@ def _run_app():
     reporter = HTMLReportGenerator()
     reporter.set_data_store(data_store)
     tracker = UsageTracker(check_interval=config.check_interval,
-                            detection_mode=config.detection_mode)
+                            detection_mode='polling')
     notifier = UsageNotifier()
     crash_handler = CrashHandler()
 
