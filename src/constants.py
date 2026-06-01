@@ -30,6 +30,7 @@ FEEDBACK_DIR = _BASE_DIR / 'feedback'
 WEB_DIR = _INTERNAL_DIR / 'ui' / 'web'
 STEAM_CACHE_PATH = _BASE_DIR / 'data' / 'steam_games.json'
 INSTALL_DIR = _BASE_DIR
+BASE_DIR = _BASE_DIR  # 对外暴露，供 bridge 等模块使用
 
 DB_PATH = DATA_DIR / 'usage_data.db'
 CONFIG_PATH = CONFIG_DIR / 'config.json'

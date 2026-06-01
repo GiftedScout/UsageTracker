@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.1.2-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.3.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows_10%2F11-0078D6" alt="Platform">
   <img src="https://img.shields.io/badge/license-GPL--3.0-green" alt="License">
   <img src="https://img.shields.io/badge/lang-English%20%7C%20%E4%B8%AD%E6%96%87-orange" alt="Languages">
@@ -45,17 +45,19 @@
 
 #### ⚙️ Settings
 
-Right-click tray icon → "Settings" to configure:
+Right-click tray icon → "Settings" to open the **Web UI** in your browser. Settings include 7 tabs:
 
 | Feature | Description |
 |:---|:---|
-| **General** | Report theme (3 styles), data retention policy, language switch, auto-start on boot, auto-show yesterday's report on startup |
-| **Ignore List** | Exclude apps from tracking; add from running processes, remove, or clear all |
-| **Categories** | Create custom categories with colors; assign apps via file picker or running process list |
+| **General** | Language switch, auto-start on boot, auto-show yesterday's report on startup |
+| **Categories** | View/edit custom categories; assign apps via running process list |
 | **Browsers** | View detected browsers (7 built-in), add custom browsers |
-| **Games** | Auto-detect Steam games, manually add games, add from running processes |
-| **Database** | View database size, clean expired data by retention policy, export to CSV |
-| **Logs & Feedback** | View runtime logs, export feedback packages for bug reporting |
+| **Games** | View detected running games, manually add or remove game directories |
+| **Ignore List** | Exclude apps from tracking; add from running processes, remove, or clear all |
+| **Database** | View database size & records, preview recent data, cleanup old data, backup |
+| **Feedback & Logs** | Adjust log level, view runtime logs, submit feedback (opens feedback folder) |
+
+> **v0.3.0 Note**: The settings interface has been fully migrated from tkinter GUI to a **Web UI** (accessible at `http://127.0.0.1:19234`). The system tray icon remains for quick access to reports and shutdown.
 
 #### 🚫 Ignore Apps from Reports
 
@@ -130,8 +132,8 @@ iscc installer.iss
 
 | File / Folder | Description |
 |:---|:---|
-| `src/` | Core modules (tracking engine, data store, report generator, notifications, i18n) |
-| `ui/` | Settings GUI (7 tab pages) |
+| `src/` | Core modules (tracking engine, data store, report generator, notifications, i18n, bridge HTTP server) |
+| `ui/` | Web UI settings (HTML/CSS/JS) |
 | `locales/` | Translation files (zh-CN.json, en.json) |
 | `assets/` | Static resources (app icon, Chart.js, report theme CSS) |
 | `docs/` | Design documents |
@@ -146,7 +148,7 @@ iscc installer.iss
 | Layer | Technology |
 |:---|:---|
 | Language | Python 3.11+ |
-| GUI | tkinter + pystray + Pillow |
+| UI | Web UI (HTML/CSS/JS) + pystray (system tray) + Pillow |
 | Database | SQLite (stdlib) |
 | Charts | Chart.js (embedded in reports) |
 | i18n | Custom JSON-based lightweight module |
@@ -160,7 +162,8 @@ iscc installer.iss
 - [x] **v0.1.0** — Bug fixes, bilingual support (zh-CN / en)
 - [x] **v0.1.1** — Stability improvements, crash fixes
 - [x] **v0.1.2** — Ignore list fixes, process picker, about dialog
-- [ ] **v0.2.0** — Event-driven tracking, auto-update, rich UI mode
+- [x] **v0.2.0-beta** — Rich UI mode, event-driven tracking (released as beta due to GUI issues)
+- [x] **v0.3.0** — Settings fully migrated to Web UI; tkinter GUI deprecated; polling mode (stable)
 - [ ] **v1.0.0** — Plugin system, cross-platform (macOS / Linux)
 
 ---

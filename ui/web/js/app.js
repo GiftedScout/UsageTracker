@@ -509,7 +509,7 @@ async function loadCategoryApps(catId) {
             div.className = 'app-item';
             div.innerHTML = `
                 <span class="app-path">${appPath}</span>
-                <button class="btn-small" data-app="${appPath}">${t('toast.removed')}</button>
+                <button class="btn-small" data-app="${appPath}">${t('btn.remove')}</button>
             `;
             div.querySelector('.btn-small').addEventListener('click', async () => {
                 await API.post('/api/apps', { action: 'remove_app', id: catId, exe_path: appPath });
@@ -601,7 +601,7 @@ async function loadIgnoredApps() {
             const appName = typeof item === 'string' ? '' : (item.app_name || '');
             div.innerHTML = `
                 <span class="app-path">${exePath} ${appName ? '(' + appName + ')' : ''}</span>
-                <button class="btn-small" data-exe="${exePath}">${t('toast.removed')}</button>
+                <button class="btn-small" data-exe="${exePath}">${t('btn.remove')}</button>
             `;
             div.querySelector('.btn-small').addEventListener('click', async () => {
                 await API.post('/api/ignore', { action: 'remove', exe_path: exePath });
@@ -652,7 +652,7 @@ async function loadGameDirs() {
             div.className = 'app-item';
             div.innerHTML = `
                 <span class="app-path">${d}</span>
-                <button class="btn-small" data-dir="${d}">${t('toast.removed')}</button>
+                <button class="btn-small" data-dir="${d}">${t('btn.remove')}</button>
             `;
             div.querySelector('.btn-small').addEventListener('click', async () => {
                 await API.post('/api/games', { action: 'remove_dir', dir: d });

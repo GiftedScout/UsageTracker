@@ -256,9 +256,8 @@ class BridgeHandler:
                 if path == '/api/feedback':
                     return self._api_post_feedback()
 
-                # API: 打开反馈文件夹
-                if path == '/api/feedback/open-dir':
-                    return self._api_open_feedback_dir()
+                if path == '/api/log-level':
+                    return self._api_post_log_level()
 
                 # API: 获取/设置日志等级
                 if path == '/api/log-level':
