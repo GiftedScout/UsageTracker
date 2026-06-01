@@ -40,7 +40,7 @@ const I18N = {
         'general.tray_hint': 'UsageTracker 正在系统托盘中运行，关闭此页面不会退出程序。',
         'categories.title': '应用分类', 'categories.custom': '自定义分类',
         'categories.no_categories': '暂无自定义分类', 'categories.apps_in': '分类中的应用',
-        'categories.no_apps': '该分类暂无应用',
+        'categories.no_apps': '该分类暂无应用', 'categories.select': '选择分类',
         'categories.id_placeholder': '分类 ID（如 dev）',
         'categories.name_placeholder': '分类名称（如 开发工具）',
         'categories.app_placeholder': '应用路径（如 C:\\app\\code.exe）',
@@ -61,14 +61,19 @@ const I18N = {
         'database.title': '数据库管理', 'database.size': '数据库大小',
         'database.records': '记录条数', 'database.cleanup_label': '清理天数：',
         'database.days': '天', 'database.backup': '备份数据库', 'database.cleanup': '清理旧数据',
+        'database.preview': '数据预览', 'database.no_data': '暂无数据',
         'feedback.title': '问题反馈', 'feedback.desc_label': '问题描述',
         'feedback.desc_placeholder': '描述你遇到的问题...',
         'feedback.contact_label': '联系方式（可选）',
         'feedback.contact_placeholder': '邮箱或微信',
         'feedback.submit': '提交反馈', 'feedback.logs_title': '崩溃日志',
         'feedback.no_logs': '暂无日志', 'feedback.logs_hint': '点击日志文件查看内容',
-        'process_picker.title': '选择进程', 'process_picker.search': '搜索进程名称...',
+        'feedback.open_folder': '打开反馈文件夹',
+        'process_picker.title': '选择进程', 'process_picker.search': '搜索进程...',
         'process_picker.close': '取消',
+        'btn.add': '添加', 'btn.remove': '删除', 'btn.from_process': '从进程选择',
+        'cat.browser': '浏览器', 'cat.game': '游戏', 'cat.dev': '开发工具',
+        'cat.communication': '通讯工具', 'cat.entertainment': '影音娱乐',
         'toast.saved': '设置已保存', 'toast.added': '已添加',
         'toast.removed': '已移除', 'toast.empty': '请填写内容',
         'toast.invalid_id': '分类 ID 只能包含字母、数字、下划线和连字符',
@@ -91,7 +96,7 @@ const I18N = {
         'general.tray_hint': 'UsageTracker is running in the system tray. Closing this page will not exit the program.',
         'categories.title': 'App Categories', 'categories.custom': 'Custom Categories',
         'categories.no_categories': 'No custom categories', 'categories.apps_in': 'Apps in Category',
-        'categories.no_apps': 'No apps in this category',
+        'categories.no_apps': 'No apps in this category', 'categories.select': 'Select category',
         'categories.id_placeholder': 'Category ID (e.g. dev)',
         'categories.name_placeholder': 'Category Name (e.g. Dev Tools)',
         'categories.app_placeholder': 'App path (e.g. C:\\app\\code.exe)',
@@ -116,15 +121,20 @@ const I18N = {
         'database.records': 'Records', 'database.cleanup_label': 'Cleanup days: ',
         'database.days': 'days', 'database.backup': 'Backup Database',
         'database.cleanup': 'Cleanup Old Data',
+        'database.preview': 'Data Preview', 'database.no_data': 'No data',
         'feedback.title': 'Feedback', 'feedback.desc_label': 'Description',
         'feedback.desc_placeholder': 'Describe the issue...',
         'feedback.contact_label': 'Contact (optional)',
         'feedback.contact_placeholder': 'Email or WeChat',
         'feedback.submit': 'Submit Feedback', 'feedback.logs_title': 'Crash Logs',
         'feedback.no_logs': 'No logs', 'feedback.logs_hint': 'Click a log file to view its content',
+        'feedback.open_folder': 'Open feedback folder',
         'process_picker.title': 'Select Process',
         'process_picker.search': 'Search process name...',
         'process_picker.close': 'Cancel',
+        'btn.add': 'Add', 'btn.remove': 'Remove', 'btn.from_process': 'From process',
+        'cat.browser': 'Browser', 'cat.game': 'Game', 'cat.dev': 'Dev Tools',
+        'cat.communication': 'Communication', 'cat.entertainment': 'Entertainment',
         'toast.saved': 'Settings saved', 'toast.added': 'Added',
         'toast.removed': 'Removed', 'toast.empty': 'Please fill in the field',
         'toast.invalid_id': 'Category ID can only contain letters, numbers, underscores and hyphens',
@@ -139,6 +149,13 @@ let currentLang = 'zh-CN';
 
 function t(key) {
     return (I18N[currentLang] && I18N[currentLang][key]) || key;
+}
+
+function translateCatName(cat) {
+    const builtin = { browser: 'cat.browser', game: 'cat.game', dev: 'cat.dev',
+                      communication: 'cat.communication', entertainment: 'cat.entertainment' };
+    if (cat.id && builtin[cat.id]) return t(builtin[cat.id]);
+    return cat.name || cat.id;
 }
 
 function applyLanguage(lang) {
@@ -437,14 +454,15 @@ async function loadCategories() {
             list.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;">${t('categories.no_categories')}</p>`;
         }
         cats.forEach(cat => {
+            const displayName = translateCatName(cat);
             const div = document.createElement('div');
             div.className = 'app-item';
             div.innerHTML = `
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${cat.color || '#0078D4'};"></span>
-                    <span class="app-name">${cat.name || cat.id}</span>
+                    <span class="app-name">${displayName}</span>
                 </div>
-                <button class="btn-small" data-id="${cat.id}">删除</button>
+                <button class="btn-small" data-id="${cat.id}">${t('btn.remove')}</button>
             `;
             div.querySelector('.btn-small').addEventListener('click', async () => {
                 const r = await API.post('/api/apps', { action: 'remove_category', id: cat.id });
@@ -456,11 +474,11 @@ async function loadCategories() {
         const sel = document.getElementById('category-selector');
         if (sel) {
             const oldVal = sel.value;
-            sel.innerHTML = `<option value="">-- ${t('categories.select') || 'Select'} --</option>`;
+            sel.innerHTML = `<option value="">-- ${t('categories.select')} --</option>`;
             cats.forEach(cat => {
                 const opt = document.createElement('option');
                 opt.value = cat.id;
-                opt.textContent = cat.name || cat.id;
+                opt.textContent = translateCatName(cat);
                 sel.appendChild(opt);
             });
             if (oldVal) {
@@ -491,7 +509,7 @@ async function loadCategoryApps(catId) {
             div.className = 'app-item';
             div.innerHTML = `
                 <span class="app-path">${appPath}</span>
-                <button class="btn-small" data-app="${appPath}">移除</button>
+                <button class="btn-small" data-app="${appPath}">${t('toast.removed')}</button>
             `;
             div.querySelector('.btn-small').addEventListener('click', async () => {
                 await API.post('/api/apps', { action: 'remove_app', id: catId, exe_path: appPath });
@@ -583,7 +601,7 @@ async function loadIgnoredApps() {
             const appName = typeof item === 'string' ? '' : (item.app_name || '');
             div.innerHTML = `
                 <span class="app-path">${exePath} ${appName ? '(' + appName + ')' : ''}</span>
-                <button class="btn-small" data-exe="${exePath}">移除</button>
+                <button class="btn-small" data-exe="${exePath}">${t('toast.removed')}</button>
             `;
             div.querySelector('.btn-small').addEventListener('click', async () => {
                 await API.post('/api/ignore', { action: 'remove', exe_path: exePath });
@@ -634,7 +652,7 @@ async function loadGameDirs() {
             div.className = 'app-item';
             div.innerHTML = `
                 <span class="app-path">${d}</span>
-                <button class="btn-small" data-dir="${d}">移除</button>
+                <button class="btn-small" data-dir="${d}">${t('toast.removed')}</button>
             `;
             div.querySelector('.btn-small').addEventListener('click', async () => {
                 await API.post('/api/games', { action: 'remove_dir', dir: d });
@@ -776,6 +794,40 @@ async function loadDatabaseInfo() {
     } catch (e) {
         console.error('[loadDatabaseInfo] error:', e);
     }
+    // Load preview
+    try {
+        const preview = await API.get('/api/database/preview');
+        if (!preview || !preview.ok) return;
+        const tableEl = document.getElementById('db-preview-table');
+        if (!tableEl) return;
+        const records = preview.records || [];
+        if (records.length === 0) {
+            tableEl.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;">${t('database.no_data') || '暂无数据'}</p>`;
+            return;
+        }
+        let html = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left;padding:4px 6px;">日期</th>
+                <th style="text-align:left;padding:4px 6px;">应用</th>
+                <th style="text-align:left;padding:4px 6px;">分类</th>
+                <th style="text-align:right;padding:4px 6px;">时长(分)</th>
+                <th style="text-align:right;padding:4px 6px;">会话数</th>
+            </tr>`;
+        records.forEach(r => {
+            const mins = Math.round(r.duration_seconds / 60);
+            html += `<tr style="border-bottom:1px solid var(--border);color:var(--text-secondary);">
+                <td style="padding:4px 6px;">${r.date}</td>
+                <td style="padding:4px 6px;">${r.app_name}</td>
+                <td style="padding:4px 6px;">${r.category}</td>
+                <td style="text-align:right;padding:4px 6px;">${mins}</td>
+                <td style="text-align:right;padding:4px 6px;">${r.session_count}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        tableEl.innerHTML = html;
+    } catch (e) {
+        console.error('[loadDatabasePreview] error:', e);
+    }
 }
 
 const btnCleanupDb = document.getElementById('btn-cleanup-db');
@@ -876,6 +928,35 @@ if (btnSubmitFeedback) {
             } else {
                 toast('❌ ' + (data ? data.msg : 'Failed'));
             }
+        } catch (e) {
+            toast('❌ ' + e.message);
+        }
+    });
+}
+
+// 打开反馈文件夹
+const btnOpenFeedbackDir = document.getElementById('btn-open-feedback-dir');
+if (btnOpenFeedbackDir) {
+    btnOpenFeedbackDir.addEventListener('click', async () => {
+        try {
+            await API.get('/api/feedback/open-dir');
+        } catch (e) {
+            toast('❌ ' + e.message);
+        }
+    });
+}
+
+// 日志等级切换
+const cfgLogLevel = document.getElementById('cfg-log-level');
+if (cfgLogLevel) {
+    // 初始化当前等级
+    API.get('/api/log-level').then(data => {
+        if (data && data.ok && data.level) cfgLogLevel.value = data.level;
+    }).catch(() => {});
+    cfgLogLevel.addEventListener('change', async () => {
+        try {
+            const data = await API.post('/api/log-level', { level: cfgLogLevel.value });
+            toast(data && data.ok ? '✅ ' + data.msg : '❌ Failed');
         } catch (e) {
             toast('❌ ' + e.message);
         }

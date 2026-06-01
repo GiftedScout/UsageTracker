@@ -57,7 +57,7 @@ KNOWN_GAMES = {
     'bh3.exe': '崩坏3',
     'cyberpunk2077.exe': '赛博朋克 2077',
     'witcher3.exe': '巫师3',
-    'mhyx.exe': '明日方舟',
+    'mhyx.exe': '明日方舟',  # 官方客户端启动器，通过 launcher 识别
     # wegame.exe 已移至 GAME_LAUNCHERS，此处不重复
 }
 

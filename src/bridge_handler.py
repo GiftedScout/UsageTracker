@@ -181,6 +181,10 @@ class BridgeHandler:
                 if path == '/api/database':
                     return self._api_get_database()
 
+                # API: 数据库预览（最近记录）
+                if path == '/api/database/preview':
+                    return self._api_database_preview()
+
                 # API: 崩溃日志
                 if path == '/api/feedback/logs':
                     return self._api_get_feedback_logs()
@@ -251,6 +255,14 @@ class BridgeHandler:
 
                 if path == '/api/feedback':
                     return self._api_post_feedback()
+
+                # API: 打开反馈文件夹
+                if path == '/api/feedback/open-dir':
+                    return self._api_open_feedback_dir()
+
+                # API: 获取/设置日志等级
+                if path == '/api/log-level':
+                    return self._api_get_log_level()
 
                 self._respond(404, {'ok': False, 'msg': 'Not found'})
 
@@ -596,6 +608,36 @@ class BridgeHandler:
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
+            def _api_database_preview(self):
+                """返回数据库最近 20 条使用记录"""
+                try:
+                    from .constants import DB_PATH
+                    import sqlite3
+                    if not DB_PATH.exists():
+                        self._respond(200, {'ok': True, 'records': [], 'tables': []})
+                        return
+                    conn = sqlite3.connect(str(DB_PATH))
+                    cur = conn.cursor()
+                    # 获取表列表
+                    tables = [r[0] for r in cur.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+                    # 获取最近20条记录
+                    rows = []
+                    try:
+                        cur.execute('SELECT date, app_name, category, duration_seconds, '
+                                    'session_count, created_at FROM usage_records '
+                                    'ORDER BY date DESC, created_at DESC LIMIT 20')
+                        cols = ['date', 'app_name', 'category', 'duration_seconds',
+                                'session_count', 'created_at']
+                        for r in cur.fetchall():
+                            rows.append(dict(zip(cols, r)))
+                    except Exception:
+                        pass
+                    conn.close()
+                    self._respond(200, {'ok': True, 'records': rows, 'tables': tables})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
             def _api_post_database(self):
                 try:
                     body = self._read_body()
@@ -690,16 +732,50 @@ class BridgeHandler:
                     if not desc:
                         self._respond(400, {'ok': False, 'msg': '描述不能为空'})
                         return
-                    from .constants import FEEDBACK_DIR
+                    from .constants import FEEDBACK_DIR, BASE_DIR, DB_PATH, LOG_DIR
                     FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
-                    import datetime
-                    fname = FEEDBACK_DIR / f'feedback_{datetime.datetime.now():%Y%m%d_%H%M%S}.json'
+                    import datetime, platform, os, shutil
+                    ts = datetime.datetime.now()
+                    fname = FEEDBACK_DIR / f'feedback_{ts:%Y%m%d_%H%M%S}.json'
+                    # 收集系统信息
+                    info = {
+                        'description': desc,
+                        'contact': contact,
+                        'time': ts.isoformat(),
+                        'version': '',
+                        'os': f'{platform.system()} {platform.release()}',
+                        'app_path': str(BASE_DIR),
+                        'db_size_mb': round(DB_PATH.stat().st_size / 1024 / 1024, 2) if DB_PATH.exists() else 0,
+                        'db_records': 0,
+                        'log_files': [],
+                    }
+                    # 获取版本号
+                    try:
+                        from .version import VERSION
+                        info['version'] = VERSION
+                    except Exception:
+                        pass
+                    # 获取数据库记录数
+                    try:
+                        import sqlite3
+                        if DB_PATH.exists():
+                            conn = sqlite3.connect(str(DB_PATH))
+                            info['db_records'] = conn.execute('SELECT COUNT(*) FROM usage_records').fetchone()[0]
+                            conn.close()
+                    except Exception:
+                        pass
+                    # 最近日志文件列表
+                    try:
+                        if LOG_DIR.exists():
+                            for f in sorted(LOG_DIR.glob('*.log'), reverse=True)[:5]:
+                                info['log_files'].append({
+                                    'name': f.name,
+                                    'size': f.stat().st_size,
+                                })
+                    except Exception:
+                        pass
                     with open(fname, 'w', encoding='utf-8') as f:
-                        json.dump({
-                            'description': desc,
-                            'contact': contact,
-                            'time': datetime.datetime.now().isoformat(),
-                        }, f, ensure_ascii=False, indent=2)
+                        json.dump(info, f, ensure_ascii=False, indent=2)
                     self._respond(200, {'ok': True,
                                          'msg': f'反馈已保存到 feedback/{fname.name}',
                                          'file': fname.name})
@@ -715,6 +791,46 @@ class BridgeHandler:
                         self._respond(200, {'ok': True, 'update': info})
                     else:
                         self._respond(200, {'ok': True, 'update': None})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_open_feedback_dir(self):
+                """打开反馈文件夹"""
+                try:
+                    import os
+                    from .constants import FEEDBACK_DIR
+                    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+                    os.startfile(str(FEEDBACK_DIR))
+                    self._respond(200, {'ok': True})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_get_log_level(self):
+                """获取当前日志等级"""
+                try:
+                    root = logging.getLogger()
+                    level_name = logging.getLevelName(root.level)
+                    self._respond(200, {'ok': True, 'level': level_name})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_post_log_level(self):
+                """设置日志等级"""
+                try:
+                    body = self._read_body()
+                    level_str = body.get('level', 'INFO').upper()
+                    level_map = {'DEBUG': logging.DEBUG, 'INFO': logging.INFO,
+                                 'WARNING': logging.WARNING, 'ERROR': logging.ERROR}
+                    if level_str not in level_map:
+                        self._respond(400, {'ok': False, 'msg': f'无效等级: {level_str}'})
+                        return
+                    root = logging.getLogger()
+                    root.setLevel(level_map[level_str])
+                    for h in root.handlers:
+                        if isinstance(h, logging.FileHandler):
+                            h.setLevel(level_map[level_str])
+                    logger.info('日志等级已更改为 %s', level_str)
+                    self._respond(200, {'ok': True, 'msg': f'日志等级已更改为 {level_str}'})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
@@ -753,35 +869,42 @@ class BridgeHandler:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
             def _api_get_classifier_games(self):
-                """返回分类器已识别的游戏列表（排除启动器）"""
+                """返回用户电脑上实际存在的已识别游戏（排除启动器）"""
                 try:
                     games = []
-                    if bridge._config_manager:
-                        # 尝试获取 app_classifier 实例
-                        from .app_classifier import AppClassifier
-                        # 直接从缓存和静态白名单构建游戏列表
-                        from .constants import STEAM_CACHE_PATH
-                        import json, os
-                        steam_games = {}
-                        extra_games = {}
-                        if os.path.exists(STEAM_CACHE_PATH):
+                    import psutil
+                    from .app_classifier import KNOWN_GAMES, GAME_LAUNCHERS
+                    # 收集当前运行中的 exe
+                    running = set()
+                    try:
+                        for p in psutil.process_iter(['name']):
                             try:
-                                with open(STEAM_CACHE_PATH, 'r', encoding='utf-8') as f:
-                                    data = json.load(f)
-                                steam_games = data.get('games', {})
-                                if isinstance(steam_games, list):
-                                    steam_games = {e: e.replace('.exe', '') for e in steam_games}
-                                extra_games = data.get('extra_games', {})
-                            except Exception:
-                                pass
-                        from .app_classifier import KNOWN_GAMES, GAME_LAUNCHERS
-                        all_games = dict(steam_games)
-                        all_games.update(extra_games)
-                        all_games.update(KNOWN_GAMES)
-                        # 排除启动器
-                        for exe in GAME_LAUNCHERS:
-                            all_games.pop(exe, None)
-                        for exe, name in sorted(all_games.items(), key=lambda x: x[1]):
+                                running.add(p.info['name'].lower())
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+                    except Exception:
+                        pass
+                    # 也检查 Steam 缓存中的游戏
+                    from .constants import STEAM_CACHE_PATH
+                    import json as _json
+                    cached = {}
+                    if STEAM_CACHE_PATH.exists():
+                        try:
+                            with open(STEAM_CACHE_PATH, 'r', encoding='utf-8') as _f:
+                                _data = _json.load(_f)
+                            cached = _data.get('games', {})
+                            if isinstance(cached, list):
+                                cached = {e: e.replace('.exe', '') for e in cached}
+                        except Exception:
+                            pass
+                    all_known = dict(cached)
+                    all_known.update(KNOWN_GAMES)
+                    # 排除启动器
+                    for exe in GAME_LAUNCHERS:
+                        all_known.pop(exe, None)
+                    # 只返回正在运行的游戏
+                    for exe, name in sorted(all_known.items(), key=lambda x: x[1]):
+                        if exe.lower() in running:
                             games.append({'exe': exe, 'name': name})
                     self._respond(200, {'ok': True, 'games': games})
                 except Exception as e:
