@@ -130,8 +130,12 @@ class BridgeHandler:
                 path = p.path
                 qs = urllib.parse.parse_qs(p.query)
 
+                # 引导页面
+                if path == '/onboarding':
+                    return self._serve_onboarding()
+
                 # 设置页面
-                if path == '/' or path == '/settings':
+                if path == '/settings':
                     return self._serve_settings()
 
                 # 静态文件
@@ -258,6 +262,15 @@ class BridgeHandler:
                 except Exception as e:
                     logger.error('静态文件服务失败: %s', e)
                     self._respond(500, {'ok': False, 'msg': str(e)})
+
+            # ── 引导页面 ──
+            def _serve_onboarding(self):
+                from .onboarding_web import render_onboarding_page
+                theme = 'fairy'
+                if bridge._config_manager:
+                    theme = bridge._config_manager.get('web_theme', 'fairy')
+                html = render_onboarding_page(theme)
+                self._respond_html(html)
 
             # ── 设置页面 ──
             def _serve_settings(self):
