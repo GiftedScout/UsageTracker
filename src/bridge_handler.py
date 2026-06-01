@@ -327,6 +327,7 @@ class BridgeHandler:
                         'language', 'auto_start', 'auto_show_daily_report',
                         'detection_mode', 'check_update', 'check_update_freq',
                         'theme', 'web_theme',
+                        'first_run', 'privacy_accepted',
                     }
                     for key in allowed:
                         if key in body:

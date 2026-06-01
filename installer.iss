@@ -9,11 +9,11 @@
 #define MyAppDir "localuserapp:UsageTracker"
 
 [Setup]
-AppId={{B8F1A2C3-D4E5-4F6A-B7C8-9D0E1F2A3B4C}
+AppId={{C9A7B4E2-3D5F-4A8B-B1C6-7E9F0D2A5B3}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={%LOCALAPPDATA}\Programs\UsageTracker
+DefaultDirName=D:\UsageTracker
 DefaultGroupName={#MyAppName}
 OutputDir=installer_output
 OutputBaseFilename=UsageTracker_Setup_{#MyAppVersion}

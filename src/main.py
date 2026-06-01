@@ -90,7 +90,7 @@ def _run_app():
 
     # 首次运行处理
     # 用局部变量保存，供后续判断是否需要打开引导页
-    _need_onboarding = config.first_run or not config.privacy_accepted
+    _need_onboarding = bool(getattr(config, 'first_run', True) or not getattr(config, 'privacy_accepted', False))
 
     if config.first_run:
         logger.info('首次运行，清除首次运行标志')
