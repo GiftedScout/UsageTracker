@@ -212,6 +212,14 @@ class BridgeHandler:
                 if path == '/api/classifier-games':
                     return self._api_get_classifier_games()
 
+                # API: 打开反馈文件夹
+                if path == '/api/feedback/open-dir':
+                    return self._api_open_feedback_dir()
+
+                # API: 获取/设置日志等级
+                if path == '/api/log-level':
+                    return self._api_get_log_level()
+
                 self._respond(404, {'ok': False, 'msg': 'Not found'})
 
             def do_POST(self):
@@ -258,10 +266,6 @@ class BridgeHandler:
 
                 if path == '/api/log-level':
                     return self._api_post_log_level()
-
-                # API: 获取/设置日志等级
-                if path == '/api/log-level':
-                    return self._api_get_log_level()
 
                 self._respond(404, {'ok': False, 'msg': 'Not found'})
 
@@ -823,12 +827,21 @@ class BridgeHandler:
                     if level_str not in level_map:
                         self._respond(400, {'ok': False, 'msg': f'无效等级: {level_str}'})
                         return
+                    new_level = level_map[level_str]
                     root = logging.getLogger()
-                    root.setLevel(level_map[level_str])
+                    root.setLevel(new_level)
+                    # 修改所有 handler（FileHandler + StreamHandler）
                     for h in root.handlers:
-                        if isinstance(h, logging.FileHandler):
-                            h.setLevel(level_map[level_str])
-                    logger.info('日志等级已更改为 %s', level_str)
+                        h.setLevel(new_level)
+                    # 持久化到 config
+                    try:
+                        if self._config_manager:
+                            self._config_manager.set('log_level', level_str)
+                            self._config_manager.save()
+                    except Exception:
+                        pass
+                    logger.warning('日志等级已更改为 %s (level=%d, handlers=%d)',
+                                    level_str, new_level, len(root.handlers))
                     self._respond(200, {'ok': True, 'msg': f'日志等级已更改为 {level_str}'})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
