@@ -39,10 +39,16 @@ DEFAULT_CONFIG: dict[str, Any] = {
         {'exe_path': 'TextInputHost.exe', 'app_name': 'Windows 输入法', 'ignored_at': ''},
         {'exe_path': 'RuntimeBroker.exe', 'app_name': 'Runtime Broker', 'ignored_at': ''},
         {'exe_path': 'StartMenuExperienceHost.exe', 'app_name': '开始菜单', 'ignored_at': ''},
+        {'exe_path': 'DesktopWindowManager.exe', 'app_name': 'DWM', 'ignored_at': ''},
+        {'exe_path': 'Taskmgr.exe', 'app_name': '任务管理器', 'ignored_at': ''},
+        {'exe_path': 'SettingSyncHost.exe', 'app_name': '设置同步', 'ignored_at': ''},
     ],
     'custom_categories': [
-        # 默认提供一个常用分类示例
         {'id': 'browser', 'name': '浏览器', 'color': '#0078D4', 'apps': []},
+        {'id': 'game', 'name': '游戏', 'color': '#E74C3C', 'apps': []},
+        {'id': 'development', 'name': '开发工具', 'color': '#2ECC71', 'apps': []},
+        {'id': 'communication', 'name': '通讯工具', 'color': '#9B59B6', 'apps': []},
+        {'id': 'entertainment', 'name': '影音娱乐', 'color': '#F39C12', 'apps': []},
     ],
     'ui_mode': 'rich',  # 'simple' or 'rich'
     'first_run': True,  # Installation first run flag
@@ -50,6 +56,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     'check_update': True,  # 启动时检查更新
     'check_update_freq': 'startup',  # 'startup', 'daily', 'weekly'
 }
+
+# 列表类型字段：升级时合并默认值（不丢失新增的默认项）
+_LIST_MERGE_KEYS = {'custom_categories', 'ignored_apps'}
 
 # 合法取值
 _VALID_THEMES = {'minimal', 'fairy_tale', 'business'}
@@ -81,7 +90,7 @@ class ConfigManager:
             self.save()
 
     def _validate(self, raw: dict[str, Any]) -> dict[str, Any]:
-        """校验并修正配置值"""
+        """校验并修正配置值（列表类型自动合并默认值）"""
         cfg = dict(DEFAULT_CONFIG)
         for key, default in DEFAULT_CONFIG.items():
             if key in raw:
@@ -94,6 +103,22 @@ class ConfigManager:
                     val = default
                 elif key == 'language' and val not in _VALID_LANGUAGES:
                     val = default
+                elif (key in _LIST_MERGE_KEYS
+                      and isinstance(default, list) and isinstance(val, list)):
+                    # 合并：保留用户已有条目，补充缺失的默认条目
+                    if key == 'custom_categories':
+                        existing_ids = {c.get('id', '') for c in val}
+                        for item in default:
+                            if item.get('id', '') not in existing_ids:
+                                val.append(dict(item))
+                    elif key == 'ignored_apps':
+                        existing_paths = {
+                            a.get('exe_path', '').lower() for a in val}
+                        for item in default:
+                            if item.get('exe_path', '').lower() not in existing_paths:
+                                val.append(dict(item))
+                    cfg[key] = val
+                    continue
                 cfg[key] = val
         for key in raw:
             if key not in cfg:

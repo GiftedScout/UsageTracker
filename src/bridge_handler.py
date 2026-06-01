@@ -183,6 +183,10 @@ class BridgeHandler:
                         'timestamp': __import__('datetime').datetime.now().isoformat(),
                     })
 
+                # API: 运行中进程列表（供进程选择器使用）
+                if path == '/api/processes':
+                    return self._api_get_processes()
+
                 self._respond(404, {'ok': False, 'msg': 'Not found'})
 
             def do_POST(self):
@@ -634,6 +638,40 @@ class BridgeHandler:
                     else:
                         self._respond(200, {'ok': True, 'update': None})
                 except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_get_processes(self):
+                """返回当前运行中的进程列表，供网页端进程选择器使用"""
+                try:
+                    import psutil
+                    seen = set()
+                    processes = []
+                    for p in psutil.process_iter(['name', 'exe', 'pid']):
+                        try:
+                            name = p.info.get('name', '')
+                            exe = p.info.get('exe', '')
+                            if not name or name.lower() in ('idle', 'system',
+                                                             'registry'):
+                                continue
+                            # 按进程名去重（同名只保留一个）
+                            key = name.lower()
+                            if key in seen:
+                                continue
+                            seen.add(key)
+                            processes.append({
+                                'name': name,
+                                'exe_path': exe or name,
+                                'pid': p.info['pid'],
+                            })
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            continue
+                    processes.sort(key=lambda x: x['name'].lower())
+                    self._respond(200, {
+                        'ok': True,
+                        'processes': processes[:300],
+                    })
+                except Exception as e:
+                    logger.error('API /processes 失败: %s', e)
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
             # ── 日志 ──

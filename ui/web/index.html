@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UsageTracker - 设置</title>
+    <title>UsageTracker - Settings</title>
     <link id="theme-css" rel="stylesheet" href="static/css/fairy-tale.css">
     <style>
         * { transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
@@ -12,14 +12,26 @@
         .inline-form input[type="color"] { width: 40px; min-width: 40px; padding: 2px; height: 32px; cursor: pointer; }
         .form-group { margin: 12px 0; }
         .form-group label { display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary); }
-        .form-group input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 14px; }
-        .form-group select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 14px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 14px; box-sizing: border-box; }
+        .form-group textarea { resize: vertical; }
         .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+        /* Process Picker Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay.show { display: flex; }
+        .modal-box { background: var(--bg-card); border-radius: var(--radius); padding: 20px; width: 90%; max-width: 480px; max-height: 70vh; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+        .modal-box h3 { margin-bottom: 12px; }
+        .modal-search { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; margin-bottom: 10px; box-sizing: border-box; }
+        .modal-list { flex: 1; overflow-y: auto; max-height: 400px; }
+        .modal-item { padding: 8px 10px; cursor: pointer; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+        .modal-item:hover { background: var(--nav-hover-bg); }
+        .modal-item .proc-name { font-weight: 500; }
+        .modal-item .proc-path { color: var(--text-secondary); font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .modal-close { margin-top: 10px; width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); cursor: pointer; font-size: 13px; }
     </style>
 </head>
 <body>
     <div id="app">
-        <!-- 侧边栏 -->
+        <!-- Sidebar -->
         <aside id="sidebar">
             <div class="sidebar-header">
                 <img src="static/assets/icon.ico" alt="icon" class="app-icon">
@@ -27,211 +39,228 @@
             </div>
             <nav id="sidebar-nav">
                 <a href="#" class="nav-item active" data-tab="general">
-                    <span class="nav-icon">⚙️</span>
-                    <span class="nav-label">通用</span>
+                    <span class="nav-icon">&#9881;&#65039;</span>
+                    <span class="nav-label" data-i18n="nav.general">通用</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="categories">
-                    <span class="nav-icon">📁</span>
-                    <span class="nav-label">分类</span>
+                    <span class="nav-icon">&#128193;</span>
+                    <span class="nav-label" data-i18n="nav.categories">分类</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="browsers">
-                    <span class="nav-icon">🌐</span>
-                    <span class="nav-label">浏览器</span>
+                    <span class="nav-icon">&#127760;</span>
+                    <span class="nav-label" data-i18n="nav.browsers">浏览器</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="games">
-                    <span class="nav-icon">🎮</span>
-                    <span class="nav-label">游戏</span>
+                    <span class="nav-icon">&#127918;</span>
+                    <span class="nav-label" data-i18n="nav.games">游戏</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="ignore">
-                    <span class="nav-icon">🚫</span>
-                    <span class="nav-label">忽略</span>
+                    <span class="nav-icon">&#128683;</span>
+                    <span class="nav-label" data-i18n="nav.ignore">忽略</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="database">
-                    <span class="nav-icon">🗄️</span>
-                    <span class="nav-label">数据库</span>
+                    <span class="nav-icon">&#128451;&#65039;</span>
+                    <span class="nav-label" data-i18n="nav.database">数据库</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="feedback">
-                    <span class="nav-icon">📝</span>
-                    <span class="nav-label">反馈</span>
+                    <span class="nav-icon">&#128221;</span>
+                    <span class="nav-label" data-i18n="nav.feedback">反馈</span>
                 </a>
             </nav>
             <div class="sidebar-footer">
-                <button id="btn-theme-switch" class="btn-icon" title="切换主题">🌸</button>
+                <button id="btn-theme-switch" class="btn-icon" title="Switch theme">&#127800;</button>
             </div>
         </aside>
 
-        <!-- 主内容区 -->
+        <!-- Main Content -->
         <main id="content">
-            <!-- 通用 Tab -->
+            <!-- General Tab -->
             <section id="tab-general" class="tab-content active">
-                <h2>通用设置</h2>
+                <h2 data-i18n="general.title">通用设置</h2>
                 <div class="card">
                     <div class="form-row">
-                        <label>语言</label>
+                        <label data-i18n="general.language">语言</label>
                         <select id="cfg-language">
                             <option value="zh-CN">简体中文</option>
                             <option value="en">English</option>
                         </select>
                     </div>
                     <div class="form-row">
-                        <label>开机自启动</label>
+                        <label data-i18n="general.auto_start">开机自启动</label>
                         <label class="switch">
                             <input type="checkbox" id="cfg-auto-start">
                             <span class="slider"></span>
                         </label>
                     </div>
                     <div class="form-row">
-                        <label>自动显示昨日报告</label>
+                        <label data-i18n="general.auto_report">自动显示昨日报告</label>
                         <label class="switch">
                             <input type="checkbox" id="cfg-auto-report">
                             <span class="slider"></span>
                         </label>
                     </div>
                     <div class="form-row">
-                        <label>检测模式</label>
+                        <label data-i18n="general.detection_mode">检测模式</label>
                         <select id="cfg-detection-mode">
-                            <option value="polling">轮询模式</option>
-                            <option value="event">事件驱动</option>
+                            <option value="polling" data-i18n="general.polling">轮询模式</option>
+                            <option value="event" data-i18n="general.event">事件驱动</option>
                         </select>
                     </div>
                     <div class="form-row">
-                        <label>自动检查更新</label>
+                        <label data-i18n="general.check_update">自动检查更新</label>
                         <label class="switch">
                             <input type="checkbox" id="cfg-check-update">
                             <span class="slider"></span>
                         </label>
                     </div>
                     <div class="form-row">
-                        <label>网页主题</label>
+                        <label data-i18n="general.web_theme">网页主题</label>
                         <select id="cfg-web-theme">
-                            <option value="fairy">🌸 童话</option>
-                            <option value="geek">🖥️ 极客</option>
+                            <option value="fairy" data-i18n-opt="fairy_theme">&#127800; 童话</option>
+                            <option value="geek" data-i18n-opt="geek_theme">&#128421;&#65039; 极客</option>
                         </select>
                     </div>
-                    <button class="btn btn-primary" id="btn-save-general">保存设置</button>
+                    <button class="btn btn-primary" id="btn-save-general" data-i18n="general.save">保存设置</button>
                 </div>
 
-                <h3>关于</h3>
+                <h3 data-i18n="general.about">关于</h3>
                 <div class="card">
                     <p>UsageTracker <span id="app-version">v0.3.0</span></p>
-                    <p>许可：GPL-3.0</p>
-                    <button class="btn btn-secondary" id="btn-check-update">检查更新</button>
+                    <p data-i18n="general.license">许可：GPL-3.0</p>
+                    <p style="font-size:12px;color:var(--text-secondary);margin-top:6px;" data-i18n="general.tray_hint">UsageTracker 正在系统托盘中运行，关闭此页面不会退出程序。</p>
+                    <button class="btn btn-secondary" id="btn-check-update" data-i18n="general.check_update_btn">检查更新</button>
                 </div>
             </section>
 
-            <!-- 分类 Tab -->
+            <!-- Categories Tab -->
             <section id="tab-categories" class="tab-content">
-                <h2>应用分类</h2>
+                <h2 data-i18n="categories.title">应用分类</h2>
                 <div class="card">
-                    <h3>自定义分类</h3>
+                    <h3 data-i18n="categories.custom">自定义分类</h3>
                     <div id="custom-categories-list"></div>
                     <div class="inline-form">
-                        <input type="text" id="new-category-id" placeholder="分类 ID（如 dev）">
-                        <input type="text" id="new-category-name" placeholder="分类名称（如 开发工具）">
-                        <input type="color" id="new-category-color" value="#0078D4" title="颜色">
-                        <button class="btn btn-primary" id="btn-add-category">添加</button>
+                        <input type="text" id="new-category-id" placeholder="ID (e.g. dev)" data-i18n-placeholder="categories.id_placeholder">
+                        <input type="text" id="new-category-name" placeholder="Name (e.g. Dev Tools)" data-i18n-placeholder="categories.name_placeholder">
+                        <input type="color" id="new-category-color" value="#0078D4" title="Color">
+                        <button class="btn btn-primary" id="btn-add-category" data-i18n="btn.add">添加</button>
                     </div>
                 </div>
                 <div class="card">
-                    <h3>分类中的应用</h3>
+                    <h3 data-i18n="categories.apps_in">分类中的应用</h3>
                     <select id="category-selector"></select>
                     <div id="category-apps-list" class="app-list"></div>
                     <div class="inline-form">
-                        <input type="text" id="new-app-path" placeholder="应用路径（如 C:\app\code.exe）">
-                        <button class="btn btn-primary" id="btn-add-app-to-category">添加</button>
+                        <input type="text" id="new-app-path" placeholder="App path (e.g. C:\app\code.exe)" list="process-datalist" data-i18n-placeholder="categories.app_placeholder">
+                        <datalist id="process-datalist"></datalist>
+                        <button class="btn btn-secondary" id="btn-pick-process-category" data-i18n="btn.from_process">从进程选择</button>
+                        <button class="btn btn-primary" id="btn-add-app-to-category" data-i18n="btn.add">添加</button>
                     </div>
                 </div>
             </section>
 
-            <!-- 浏览器 Tab -->
+            <!-- Browsers Tab -->
             <section id="tab-browsers" class="tab-content">
-                <h2>浏览器规则</h2>
-                <p class="desc">配置哪些浏览器 URL 对应哪个分类</p>
+                <h2 data-i18n="browsers.title">浏览器规则</h2>
+                <p class="desc" data-i18n="browsers.desc">配置浏览器 URL 匹配规则（自动检测的浏览器无需手动添加）</p>
                 <div class="card">
                     <div id="browser-rules-list"></div>
+                    <div id="detected-browsers" style="margin:10px 0;padding:10px;border-radius:8px;background:var(--bg-primary);font-size:12px;color:var(--text-secondary);"></div>
                     <div class="form-group">
-                        <label>规则名称</label>
-                        <input type="text" id="new-browser-name" placeholder="如 GitHub">
+                        <label data-i18n="browsers.name">规则名称</label>
+                        <input type="text" id="new-browser-name" placeholder="e.g. GitHub" data-i18n-placeholder="browsers.name_placeholder">
                     </div>
                     <div class="form-group">
-                        <label>浏览器可执行文件路径</label>
-                        <input type="text" id="new-browser-exe" placeholder="如 C:\app\chrome.exe（留空匹配所有浏览器）">
+                        <label data-i18n="browsers.exe">浏览器可执行文件路径</label>
+                        <input type="text" id="new-browser-exe" placeholder="e.g. C:\app\chrome.exe" data-i18n-placeholder="browsers.exe_placeholder">
                     </div>
                     <div class="form-group">
-                        <label>URL 匹配模式</label>
-                        <input type="text" id="new-browser-url" placeholder="如 github.com（留空匹配所有 URL）">
+                        <label data-i18n="browsers.url">URL 匹配模式</label>
+                        <input type="text" id="new-browser-url" placeholder="e.g. github.com" data-i18n-placeholder="browsers.url_placeholder">
                     </div>
-                    <button class="btn btn-primary" id="btn-add-browser-rule">添加规则</button>
+                    <button class="btn btn-primary" id="btn-add-browser-rule" data-i18n="browsers.add_rule">添加规则</button>
                 </div>
             </section>
 
-            <!-- 游戏 Tab -->
+            <!-- Games Tab -->
             <section id="tab-games" class="tab-content">
-                <h2>游戏目录</h2>
-                <p class="desc">配置游戏可执行文件所在目录</p>
+                <h2 data-i18n="games.title">游戏目录</h2>
+                <p class="desc" data-i18n="games.desc">配置游戏可执行文件所在目录（Steam 游戏自动扫描无需手动添加）</p>
                 <div class="card">
                     <div id="game-dirs-list"></div>
+                    <div id="detected-games" style="margin:10px 0;padding:10px;border-radius:8px;background:var(--bg-primary);font-size:12px;color:var(--text-secondary);"></div>
                     <div class="inline-form">
-                        <input type="text" id="new-game-dir" placeholder="游戏目录路径（如 D:\Steam\steamapps\common）">
-                        <button class="btn btn-primary" id="btn-add-game-dir">添加</button>
+                        <input type="text" id="new-game-dir" placeholder="Game directory (e.g. D:\Steam\steamapps\common)" data-i18n-placeholder="games.dir_placeholder">
+                        <button class="btn btn-primary" id="btn-add-game-dir" data-i18n="btn.add">添加</button>
                     </div>
                 </div>
             </section>
 
-            <!-- 忽略 Tab -->
+            <!-- Ignore Tab -->
             <section id="tab-ignore" class="tab-content">
-                <h2>忽略列表</h2>
-                <p class="desc">被忽略的应用不会计入使用时长</p>
+                <h2 data-i18n="ignore.title">忽略列表</h2>
+                <p class="desc" data-i18n="ignore.desc">被忽略的应用不会计入使用时长</p>
                 <div class="card">
                     <div id="ignored-apps-list" class="app-list"></div>
                     <div class="inline-form">
-                        <input type="text" id="new-ignore-path" placeholder="应用路径（如 C:\Windows\System32\cmd.exe）">
-                        <button class="btn btn-primary" id="btn-add-ignore">添加</button>
+                        <input type="text" id="new-ignore-path" placeholder="App path (e.g. C:\Windows\System32\cmd.exe)" list="process-datalist-ignore" data-i18n-placeholder="ignore.path_placeholder">
+                        <datalist id="process-datalist-ignore"></datalist>
+                        <button class="btn btn-secondary" id="btn-pick-process-ignore" data-i18n="btn.from_process">从进程选择</button>
+                        <button class="btn btn-primary" id="btn-add-ignore" data-i18n="btn.add">添加</button>
                     </div>
                 </div>
             </section>
 
-            <!-- 数据库 Tab -->
+            <!-- Database Tab -->
             <section id="tab-database" class="tab-content">
-                <h2>数据库管理</h2>
+                <h2 data-i18n="database.title">数据库管理</h2>
                 <div class="card">
-                    <p>数据库大小：<span id="db-size">-</span></p>
-                    <p>记录条数：<span id="db-records">-</span></p>
+                    <p><span data-i18n="database.size">数据库大小</span>：<span id="db-size">-</span></p>
+                    <p><span data-i18n="database.records">记录条数</span>：<span id="db-records">-</span></p>
                     <div class="inline-form">
-                        <label>清理天数：</label>
+                        <label data-i18n="database.cleanup_label">清理天数：</label>
                         <input type="number" id="cleanup-days" value="90" min="1" style="width: 80px;">
-                        <span>天</span>
+                        <span data-i18n="database.days">天</span>
                     </div>
                     <div class="btn-row">
-                        <button class="btn btn-secondary" id="btn-backup-db">备份数据库</button>
-                        <button class="btn btn-warning" id="btn-cleanup-db">清理旧数据</button>
+                        <button class="btn btn-secondary" id="btn-backup-db" data-i18n="database.backup">备份数据库</button>
+                        <button class="btn btn-warning" id="btn-cleanup-db" data-i18n="database.cleanup">清理旧数据</button>
                     </div>
                 </div>
             </section>
 
-            <!-- 反馈 Tab -->
+            <!-- Feedback Tab -->
             <section id="tab-feedback" class="tab-content">
-                <h2>问题反馈</h2>
+                <h2 data-i18n="feedback.title">问题反馈</h2>
                 <div class="card">
                     <div class="form-row">
-                        <label>问题描述</label>
-                        <textarea id="feedback-desc" rows="5" placeholder="描述你遇到的问题..."></textarea>
+                        <label data-i18n="feedback.desc_label">问题描述</label>
+                        <textarea id="feedback-desc" rows="5" placeholder="Describe the issue..." data-i18n-placeholder="feedback.desc_placeholder"></textarea>
                     </div>
                     <div class="form-row">
-                        <label>联系方式（可选）</label>
-                        <input type="text" id="feedback-contact" placeholder="邮箱或微信">
+                        <label data-i18n="feedback.contact_label">联系方式（可选）</label>
+                        <input type="text" id="feedback-contact" placeholder="Email or WeChat" data-i18n-placeholder="feedback.contact_placeholder">
                     </div>
-                    <button class="btn btn-primary" id="btn-submit-feedback">提交反馈</button>
+                    <button class="btn btn-primary" id="btn-submit-feedback" data-i18n="feedback.submit">提交反馈</button>
                 </div>
                 <div class="card">
-                    <h3>崩溃日志</h3>
+                    <h3 data-i18n="feedback.logs_title">崩溃日志</h3>
                     <div id="crash-logs-list"></div>
                 </div>
             </section>
         </main>
     </div>
 
-    <!-- Toast 通知 -->
+    <!-- Process Picker Modal -->
+    <div class="modal-overlay" id="process-modal">
+        <div class="modal-box">
+            <h3 data-i18n="process_picker.title">选择进程</h3>
+            <input type="text" class="modal-search" id="process-search" data-i18n-placeholder="process_picker.search" placeholder="搜索进程名称...">
+            <div class="modal-list" id="process-list"></div>
+            <button class="modal-close" id="process-modal-close" data-i18n="process_picker.close">取消</button>
+        </div>
+    </div>
+
+    <!-- Toast -->
     <div id="toast" class="toast hidden"></div>
 
     <script src="static/js/app.js"></script>
