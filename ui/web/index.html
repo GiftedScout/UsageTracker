@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UsageTracker - 设置</title>
+    <link id="theme-css" rel="stylesheet" href="static/css/fairy-tale.css">
+    <style>
+        /* 主题切换动画 */
+        * { transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 侧边栏 -->
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <img src="static/assets/icon.ico" alt="icon" class="app-icon">
+                <span class="app-title">UsageTracker</span>
+            </div>
+            <nav id="sidebar-nav">
+                <a href="#" class="nav-item active" data-tab="general">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">通用</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="categories">
+                    <span class="nav-icon">📁</span>
+                    <span class="nav-label">分类</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="browsers">
+                    <span class="nav-icon">🌐</span>
+                    <span class="nav-label">浏览器</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="games">
+                    <span class="nav-icon">🎮</span>
+                    <span class="nav-label">游戏</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="ignore">
+                    <span class="nav-icon">🚫</span>
+                    <span class="nav-label">忽略</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="database">
+                    <span class="nav-icon">🗄️</span>
+                    <span class="nav-label">数据库</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="feedback">
+                    <span class="nav-icon">📝</span>
+                    <span class="nav-label">反馈</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="btn-theme-switch" class="btn-icon" title="切换主题">🌸</button>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main id="content">
+            <!-- 通用 Tab -->
+            <section id="tab-general" class="tab-content active">
+                <h2>通用设置</h2>
+                <div class="card">
+                    <div class="form-row">
+                        <label>语言</label>
+                        <select id="cfg-language">
+                            <option value="zh-CN">简体中文</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label>开机自启动</label>
+                        <label class="switch">
+                            <input type="checkbox" id="cfg-auto-start">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label>自动显示昨日报告</label>
+                        <label class="switch">
+                            <input type="checkbox" id="cfg-auto-report">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label>检测模式</label>
+                        <select id="cfg-detection-mode">
+                            <option value="polling">轮询模式</option>
+                            <option value="event">事件驱动</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label>自动检查更新</label>
+                        <label class="switch">
+                            <input type="checkbox" id="cfg-check-update">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label>网页主题</label>
+                        <select id="cfg-web-theme">
+                            <option value="fairy">🌸 童话</option>
+                            <option value="geek">🖥️ 极客</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="btn-save-general">保存设置</button>
+                </div>
+
+                <h3>关于</h3>
+                <div class="card">
+                    <p>UsageTracker <span id="app-version">v0.2.0</span></p>
+                    <p>许可：GPL-3.0</p>
+                    <button class="btn btn-secondary" id="btn-check-update">检查更新</button>
+                </div>
+            </section>
+
+            <!-- 分类 Tab -->
+            <section id="tab-categories" class="tab-content">
+                <h2>应用分类</h2>
+                <div class="card">
+                    <h3>自定义分类</h3>
+                    <div id="custom-categories-list"></div>
+                    <button class="btn btn-primary" id="btn-add-category">+ 添加分类</button>
+                </div>
+                <div class="card">
+                    <h3>分类中的应用</h3>
+                    <select id="category-selector"></select>
+                    <div id="category-apps-list" class="app-list"></div>
+                    <button class="btn btn-primary" id="btn-add-app-to-category">+ 添加应用</button>
+                </div>
+            </section>
+
+            <!-- 浏览器 Tab -->
+            <section id="tab-browsers" class="tab-content">
+                <h2>浏览器规则</h2>
+                <p class="desc">配置哪些浏览器 URL 对应哪个分类</p>
+                <div class="card">
+                    <div id="browser-rules-list"></div>
+                    <button class="btn btn-primary" id="btn-add-browser-rule">+ 添加规则</button>
+                </div>
+            </section>
+
+            <!-- 游戏 Tab -->
+            <section id="tab-games" class="tab-content">
+                <h2>游戏目录</h2>
+                <p class="desc">配置游戏可执行文件所在目录</p>
+                <div class="card">
+                    <div id="game-dirs-list"></div>
+                    <button class="btn btn-primary" id="btn-add-game-dir">+ 添加目录</button>
+                </div>
+            </section>
+
+            <!-- 忽略 Tab -->
+            <section id="tab-ignore" class="tab-content">
+                <h2>忽略列表</h2>
+                <p class="desc">被忽略的应用不会计入使用时长</p>
+                <div class="card">
+                    <div id="ignored-apps-list" class="app-list"></div>
+                    <button class="btn btn-primary" id="btn-add-ignore">+ 忽略应用</button>
+                </div>
+            </section>
+
+            <!-- 数据库 Tab -->
+            <section id="tab-database" class="tab-content">
+                <h2>数据库管理</h2>
+                <div class="card">
+                    <p>数据库大小：<span id="db-size">-</span> MB</p>
+                    <p>记录条数：<span id="db-records">-</span></p>
+                    <button class="btn btn-secondary" id="btn-backup-db">备份数据库</button>
+                    <button class="btn btn-warning" id="btn-cleanup-db">清理 90 天前数据</button>
+                </div>
+            </section>
+
+            <!-- 反馈 Tab -->
+            <section id="tab-feedback" class="tab-content">
+                <h2>问题反馈</h2>
+                <div class="card">
+                    <div class="form-row">
+                        <label>问题描述</label>
+                        <textarea id="feedback-desc" rows="5" placeholder="描述你遇到的问题..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <label>联系方式（可选）</label>
+                        <input type="text" id="feedback-contact" placeholder="邮箱或微信">
+                    </div>
+                    <button class="btn btn-primary" id="btn-submit-feedback">提交反馈</button>
+                </div>
+                <div class="card">
+                    <h3>崩溃日志</h3>
+                    <div id="crash-logs-list"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="static/js/app.js"></script>
+</body>
+</html>

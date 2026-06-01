@@ -176,8 +176,12 @@ class TrayApp:
             logger.error('生成报告失败: %s', e)
 
     def _open_settings(self, icon=None, item=None) -> None:
-        if self._on_settings:
-            self._on_settings()
+        logger.info('托盘：打开网页端设置')
+        import webbrowser
+        try:
+            webbrowser.open('http://127.0.0.1:19234/settings')
+        except Exception as e:
+            logger.error('打开网页设置失败: %s', e)
 
     def _check_update(self, icon=None, item=None) -> None:
         """手动检查更新"""

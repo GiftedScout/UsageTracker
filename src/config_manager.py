@@ -243,6 +243,17 @@ class ConfigManager:
     def set(self, key: str, value: Any) -> None:
         self._config[key] = value
 
+    # ---- web_theme ----
+    @property
+    def web_theme(self) -> str:
+        """网页端主题: 'fairy' | 'geek'"""
+        return self._config.get('web_theme', 'fairy')
+
+    @web_theme.setter
+    def web_theme(self, value: str) -> None:
+        if value in ('fairy', 'geek'):
+            self._config['web_theme'] = value
+
     # ---- 忽略名单 ----
 
     def add_ignored_app(self, exe_path: str, app_name: str) -> bool:

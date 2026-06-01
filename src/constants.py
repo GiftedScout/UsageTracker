@@ -24,6 +24,7 @@ LOG_DIR = _BASE_DIR / 'logs'
 CRASH_LOG_DIR = _BASE_DIR / 'logs'
 BRIDGE_DIR = _BASE_DIR / 'bridge'
 FEEDBACK_DIR = _BASE_DIR / 'feedback'
+WEB_DIR = _BASE_DIR / 'ui' / 'web'
 STEAM_CACHE_PATH = _BASE_DIR / 'data' / 'steam_games.json'
 INSTALL_DIR = _BASE_DIR
 

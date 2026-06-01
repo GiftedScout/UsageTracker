@@ -294,79 +294,14 @@ def _run_app():
 
     tracker.on_app_switch = _on_session_end
 
-    # 设置窗口回调 — 独立线程运行 mainloop，防止重复打开
-    _settings_lock = threading.Lock()
-
+    # 设置窗口回调 — 打开浏览器访问网页端设置
     def _open_settings():
-        logger.info('设置窗口：_open_settings 被调用')
-        if not _settings_lock.acquire(blocking=False):
-            logger.info('设置窗口：已有实例，忽略')
-            return  # 已有设置窗口打开，忽略重复点击
-        def _run():
-            try:
-                logger.info('设置窗口：开始创建...')
-                import tkinter as tk
-                logger.info('设置窗口：tkinter 导入成功')
-                from ui.settings_window import SettingsWindow
-                logger.info('设置窗口：SettingsWindow 导入成功')
-                # 用独立 Tk 根（设为实际可见的隐形小窗，作为 Toplevel 的 parent）
-                settings_root = tk.Tk()
-                settings_root.withdraw()          # 隐藏根窗口本体
-                settings_root.wm_attributes('-alpha', 0)  # 完全透明
-                settings_root.wm_attributes('-topmost', True)
-                logger.info('设置窗口：Tk 根窗口创建成功')
-
-                sw = SettingsWindow(
-                    settings_root, config_manager=config,
-                    startup_manager=startup, app_classifier=classifier,
-                    data_store=data_store, crash_handler=crash_handler)
-                logger.info('设置窗口：SettingsWindow 实例化成功')
-
-                # 窗口关闭时销毁整个 Tk 根，退出 mainloop（必须用 after 确保在主循环内执行）
-                def _destroy():
-                    try:
-                        settings_root.destroy()
-                    except Exception:
-                        pass
-
-                orig_ok = sw._on_ok
-                orig_cancel = sw._on_cancel
-
-                def _on_close_ok():
-                    orig_ok()
-                    settings_root.after(0, _destroy)
-
-                def _on_close_cancel():
-                    orig_cancel()
-                    settings_root.after(0, _destroy)
-
-                sw._window.protocol('WM_DELETE_WINDOW', _on_close_cancel)
-                sw._on_ok = _on_close_ok
-                sw._on_cancel = _on_close_cancel
-
-                # 模式切换时也要销毁 settings_root 防止线程卡住
-                sw._on_switched_cb = lambda: settings_root.after(0, _destroy)
-
-                # 居中显示
-                sw._window.update_idletasks()
-                w, h = 700, 500
-                x = (sw._window.winfo_screenwidth() - w) // 2
-                y = (sw._window.winfo_screenheight() - h) // 2
-                sw._window.geometry(f'{w}x{h}+{x}+{y}')
-                sw._window.deiconify()
-                sw._window.lift()
-                sw._window.focus_force()
-                logger.info('设置窗口：窗口已显示，进入 mainloop')
-                settings_root.mainloop()
-                logger.info('设置窗口：mainloop 退出')
-            except Exception as exc:
-                logger.error('设置窗口异常: %s', exc, exc_info=True)
-            finally:
-                _settings_lock.release()
-
-        # 注意：局部变量名改为 _thr，避免覆盖 i18n 的 t() 函数
-        _thr = threading.Thread(target=_run, daemon=True, name='settings-window')
-        _thr.start()
+        logger.info('打开网页端设置')
+        import webbrowser
+        try:
+            webbrowser.open('http://127.0.0.1:19234/settings')
+        except Exception as e:
+            logger.error('打开浏览器失败: %s', e)
 
     # 创建托盘
     icon = _create_icon()

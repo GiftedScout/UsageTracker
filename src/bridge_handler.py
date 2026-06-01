@@ -1,12 +1,16 @@
 """
-报告 ↔ 主进程通信
-- 轻量 HTTP 服务（127.0.0.1:19234），接收来自 HTML 报告的 ignore 请求
+报告 ↔ 主进程通信 + 网页端设置服务
+- 轻量 HTTP 服务（127.0.0.1:19234）
+- 接收来自 HTML 报告的 ignore 请求
+- 提供网页端设置界面（/settings）和 REST API
 - 兼容文件轮询 bridge 目录（旧方案）
-- 支持忽略应用操作
 """
 
 import json
 import logging
+import mimetypes
+import os
+import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -14,10 +18,11 @@ logger = logging.getLogger(__name__)
 
 VALID_ACTIONS = {'ignore_app'}
 _BRIDGE_PORT = 19234
+_MAX_BODY = 2 * 1024 * 1024  # 2MB
 
 
 class BridgeHandler:
-    """报告与主进程的桥接通信"""
+    """报告与主进程的桥接通信 + 网页端设置服务"""
 
     def __init__(self, bridge_dir: str | None = None, poll_interval: int = 30):
         if bridge_dir is None:
@@ -27,20 +32,19 @@ class BridgeHandler:
             self.bridge_dir = Path(bridge_dir)
         self.bridge_dir.mkdir(parents=True, exist_ok=True)
         self.poll_interval = poll_interval
-        self._stop_event: 'threading.Event | None' = None
+        self._stop_event = None
         self._http_server = None
         self._config_manager = None
         self._data_store = None
 
+    # ── ignore 处理（复用） ──────────────────────────────
+
     def _handle_ignore(self, exe_path: str, app_name: str) -> bool:
-        """执行忽略应用操作"""
-        # 无 exe_path 时，尝试通过正在运行的进程匹配
         if not exe_path and app_name:
             exe_path = self._resolve_exe_by_name(app_name)
         if not exe_path:
             logger.warning('忽略操作缺少 exe_path 且无法匹配: %s', app_name)
             return False
-        # 不做 realpath 转换，保持与 psutil 返回路径格式一致
         if self._config_manager:
             self._config_manager.add_ignored_app(exe_path, app_name)
         if self._data_store:
@@ -50,7 +54,6 @@ class BridgeHandler:
 
     @staticmethod
     def _resolve_exe_by_name(app_name: str) -> str:
-        """通过正在运行的进程按 app_name 匹配，返回 exe_path"""
         import psutil
         name_lower = app_name.lower()
         try:
@@ -64,9 +67,9 @@ class BridgeHandler:
             pass
         return ''
 
+    # ── 文件轮询（旧方案，保留） ───────────────────
+
     def poll_once(self, config_manager=None, data_store=None) -> int:
-        """执行一次轮询，返回处理的请求数"""
-        processed = 0
         request_file = self.bridge_dir / 'ignore_request.json'
         if not request_file.exists():
             return 0
@@ -90,12 +93,14 @@ class BridgeHandler:
             request_file.unlink()
         except Exception as e:
             logger.error('处理 bridge 请求失败: %s', e)
+            return 0
         return processed
 
     def start_polling(self, config_manager=None, data_store=None) -> 'threading.Thread':
-        """启动后台轮询线程"""
         import threading
         self._stop_event = threading.Event()
+        self._config_manager = config_manager
+        self._data_store = data_store
 
         def _poll_loop():
             import time
@@ -111,36 +116,432 @@ class BridgeHandler:
         logger.info('Bridge 轮询已启动（间隔 %d 秒）', self.poll_interval)
         return thread
 
+    # ── HTTP 服务（扩展：设置页面 + API） ─────────
+
     def start_http_server(self, config_manager=None, data_store=None):
-        """启动轻量 HTTP 服务，供 HTML 报告发送 ignore 请求"""
         self._config_manager = config_manager
         self._data_store = data_store
         bridge = self
 
         class _Handler(BaseHTTPRequestHandler):
-            def _handle_ignore_request(self):
-                try:
-                    length = int(self.headers.get('Content-Length', 0))
-                    body = json.loads(self.rfile.read(length))
-                    exe_path = body.get('exe_path', '')
-                    app_name = body.get('app_name', '')
-                    if not app_name:
-                        self._respond(400, {'ok': False, 'msg': '缺少参数'})
-                        return
-                    ok = bridge._handle_ignore(exe_path, app_name)
-                    if not ok:
-                        self._respond(400, {'ok': False, 'msg': '无法获取进程路径'})
-                        return
-                    self._respond(200, {'ok': True, 'msg': f'已忽略: {app_name}'})
-                except Exception as e:
-                    logger.error('HTTP ignore 请求失败: %s', e)
-                    try:
-                        self._respond(500, {'ok': False, 'msg': str(e)})
-                    except Exception:
-                        pass
+            # ── 路由分发 ──
+            def do_GET(self):
+                p = urllib.parse.urlparse(self.path)
+                path = p.path
+                qs = urllib.parse.parse_qs(p.query)
 
-            def _handle_export_pdf(self):
-                """导出当前报告为 PDF（由 HTML 中的按钮触发）"""
+                # 设置页面
+                if path == '/' or path == '/settings':
+                    return self._serve_settings()
+
+                # 静态文件
+                if path.startswith('/static/'):
+                    return self._serve_static(path)
+
+                # API: 获取配置
+                if path == '/api/config':
+                    return self._api_get_config()
+
+                # API: 获取应用分类列表
+                if path == '/api/apps':
+                    return self._api_get_apps()
+
+                # API: 忽略名单
+                if path == '/api/ignore':
+                    return self._api_get_ignore()
+
+                # API: 游戏目录
+                if path == '/api/games':
+                    return self._api_get_games()
+
+                # API: 浏览器规则
+                if path == '/api/browsers':
+                    return self._api_get_browsers()
+
+                # API: 数据库状态
+                if path == '/api/database':
+                    return self._api_get_database()
+
+                # API: 崩溃日志
+                if path == '/api/feedback/logs':
+                    return self._api_get_feedback_logs()
+
+                # API: 检查更新
+                if path == '/api/check-update':
+                    return self._api_check_update()
+
+                self._respond(404, {'ok': False, 'msg': 'Not found'})
+
+            def do_POST(self):
+                p = urllib.parse.urlparse(self.path)
+                path = p.path
+
+                if path == '/api/config':
+                    return self._api_post_config()
+
+                if path == '/api/ignore':
+                    return self._api_post_ignore()
+
+                if path == '/api/apps':
+                    return self._api_post_apps()
+
+                if path == '/api/games':
+                    return self._api_post_games()
+
+                if path == '/api/browsers':
+                    return self._api_post_browsers()
+
+                if path == '/api/database':
+                    return self._api_post_database()
+
+                if path == '/api/export-pdf':
+                    return self._api_post_export_pdf()
+
+                if path == '/api/feedback':
+                    return self._api_post_feedback()
+
+                self._respond(404, {'ok': False, 'msg': 'Not found'})
+
+            def do_OPTIONS(self):
+                self.send_response(204)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+
+            # ── 响应工具 ──
+            def _respond(self, code, data: dict, content_type='application/json; charset=utf-8'):
+                body = json.dumps(data, ensure_ascii=False).encode('utf-8')
+                self.send_response(code)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def _respond_html(self, html: str):
+                body = html.encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def _read_body(self) -> dict:
+                length = int(self.headers.get('Content-Length', 0))
+                if length <= 0 or length > _MAX_BODY:
+                    return {}
+                return json.loads(self.rfile.read(length))
+
+            # ── 静态文件服务 ──
+            def _serve_static(self, path: str):
+                from .constants import WEB_DIR
+                # 安全：只允许 [a-zA-Z0-9_./-]，禁止 ..
+                rel = path[len('/static/'):]
+                if '..' in rel or rel.startswith('/'):
+                    self._respond(400, {'ok': False, 'msg': 'Bad path'})
+                    return
+                file_path = WEB_DIR / rel
+                if not file_path.exists() or not file_path.is_file():
+                    self._respond(404, {'ok': False, 'msg': 'File not found'})
+                    return
+                mime, _ = mimetypes.guess_type(str(file_path))
+                if not mime:
+                    mime = 'application/octet-stream'
+                try:
+                    data = file_path.read_bytes()
+                    self.send_response(200)
+                    self.send_header('Content-Type', mime)
+                    self.send_header('Content-Length', str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                except Exception as e:
+                    logger.error('静态文件服务失败: %s', e)
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            # ── 设置页面 ──
+            def _serve_settings(self):
+                from .constants import WEB_DIR
+                html_path = WEB_DIR / 'index.html'
+                if html_path.exists():
+                    return self._respond_html(html_path.read_text(encoding='utf-8'))
+                # 兜底：返回简易提示页
+                self._respond_html('''
+                    <!doctype html><html><head><meta charset="utf-8">
+                    <title>UsageTracker Settings</title></head>
+                    <body style="background:#0a0f1a;color:#fff;font-family:sans-serif;
+                                 display:flex;align-items:center;justify-content:center;height:100vh;">
+                    <div style="text-align:center;">
+                        <h1>UsageTracker</h1>
+                        <p>网页端设置界面正在建设中，请稍后...</p>
+                        <p style="color:#b0b8c8;font-size:14px;">需要先将 ui/web/ 目录部署到程序中。</p>
+                    </div></body></html>
+                ''')
+
+            # ── API 实现 ──
+            def _api_get_config(self):
+                try:
+                    cfg = bridge._config_manager
+                    if not cfg:
+                        self._respond(503, {'ok': False, 'msg': '服务未就绪'})
+                        return
+                    data = {
+                        'ok': True,
+                        'language': cfg.language,
+                        'auto_start': cfg.auto_start,
+                        'auto_show_daily_report': cfg.auto_show_daily_report,
+                        'detection_mode': cfg.detection_mode,
+                        'check_update': cfg.check_update,
+                        'check_update_freq': cfg.check_update_freq,
+                        'theme': cfg.get('theme', 'fairy_tale'),
+                        'web_theme': cfg.get('web_theme', 'fairy'),
+                        'version': cfg.get('version', ''),
+                    }
+                    self._respond(200, data)
+                except Exception as e:
+                    logger.error('API /config GET 失败: %s', e)
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_post_config(self):
+                try:
+                    body = self._read_body()
+                    cfg = bridge._config_manager
+                    if not cfg:
+                        self._respond(503, {'ok': False, 'msg': '服务未就绪'})
+                        return
+                    # 只更新允许的字段
+                    allowed = {
+                        'language', 'auto_start', 'auto_show_daily_report',
+                        'detection_mode', 'check_update', 'check_update_freq',
+                        'theme', 'web_theme',
+                    }
+                    for key in allowed:
+                        if key in body:
+                            cfg.set(key, body[key])
+                    cfg.save()
+                    self._respond(200, {'ok': True, 'msg': '配置已保存'})
+                except Exception as e:
+                    logger.error('API /config POST 失败: %s', e)
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_get_apps(self):
+                try:
+                    cfg = bridge._config_manager
+                    data = {
+                        'ok': True,
+                        'custom_categories': cfg.custom_categories if cfg else [],
+                    }
+                    self._respond(200, data)
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_post_apps(self):
+                try:
+                    body = self._read_body()
+                    cfg = bridge._config_manager
+                    action = body.get('action', '')
+                    if action == 'add_category':
+                        cid = body.get('id', '')
+                        name = body.get('name', '')
+                        color = body.get('color', '#0078D4')
+                        if cfg and cid and name:
+                            cfg.add_custom_category(cid, name, color)
+                            self._respond(200, {'ok': True})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '参数不完整'})
+                    elif action == 'remove_category':
+                        cid = body.get('id', '')
+                        if cfg and cid:
+                            cfg.remove_custom_category(cid)
+                            self._respond(200, {'ok': True})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '缺少 id'})
+                    elif action == 'add_app':
+                        cid = body.get('id', '')
+                        exe = body.get('exe_path', '')
+                        if cfg and cid and exe:
+                            cfg.add_app_to_category(cid, exe)
+                            self._respond(200, {'ok': True})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '参数不完整'})
+                    elif action == 'remove_app':
+                        cid = body.get('id', '')
+                        exe = body.get('exe_path', '')
+                        if cfg and cid and exe:
+                            cfg.remove_app_from_category(cid, exe)
+                            self._respond(200, {'ok': True})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '参数不完整'})
+                    else:
+                        self._respond(400, {'ok': False, 'msg': '未知 action'})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_get_ignore(self):
+                try:
+                    cfg = bridge._config_manager
+                    self._respond(200, {
+                        'ok': True,
+                        'ignored_apps': cfg.ignored_apps if cfg else [],
+                    })
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_post_ignore(self):
+                try:
+                    body = self._read_body()
+                    action = body.get('action', '')
+                    cfg = bridge._config_manager
+                    if action == 'add':
+                        exe = body.get('exe_path', '')
+                        name = body.get('app_name', '')
+                        if cfg and exe:
+                            cfg.add_ignored_app(exe, name or '')
+                            self._respond(200, {'ok': True})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '缺少 exe_path'})
+                    elif action == 'remove':
+                        exe = body.get('exe_path', '')
+                        if cfg and exe:
+                            cfg.remove_ignored_app(exe)
+                            self._respond(200, {'ok': True})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '缺少 exe_path'})
+                    else:
+                        self._respond(400, {'ok': False, 'msg': '未知 action'})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_get_games(self):
+                try:
+                    cfg = bridge._config_manager
+                    self._respond(200, {
+                        'ok': True,
+                        'game_dirs': cfg.game_dirs if cfg else [],
+                    })
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_post_games(self):
+                try:
+                    body = self._read_body()
+                    action = body.get('action', '')
+                    cfg = bridge._config_manager
+                    if action == 'add_dir':
+                        d = body.get('dir', '')
+                        if cfg and d and d not in cfg.game_dirs:
+                            cfg.game_dirs.append(d)
+                            cfg.save()
+                            self._respond(200, {'ok': True})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '参数错误'})
+                    elif action == 'remove_dir':
+                        d = body.get('dir', '')
+                        if cfg:
+                            cfg.game_dirs = [x for x in cfg.game_dirs if x != d]
+                            cfg.save()
+                            self._respond(200, {'ok': True})
+                    else:
+                        self._respond(400, {'ok': False, 'msg': '未知 action'})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_get_browsers(self):
+                try:
+                    cfg = bridge._config_manager
+                    self._respond(200, {
+                        'ok': True,
+                        'browsers': cfg.browsers if cfg else [],
+                    })
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_post_browsers(self):
+                try:
+                    body = self._read_body()
+                    action = body.get('action', '')
+                    cfg = bridge._config_manager
+                    if action == 'add_rule':
+                        rule = body.get('rule', {})
+                        if cfg and rule:
+                            cfg.browsers.append(rule)
+                            cfg.save()
+                            self._respond(200, {'ok': True})
+                    elif action == 'remove_rule':
+                        idx = body.get('index', -1)
+                        if cfg and 0 <= idx < len(cfg.browsers):
+                            cfg.browsers.pop(idx)
+                            cfg.save()
+                            self._respond(200, {'ok': True})
+                    else:
+                        self._respond(400, {'ok': False, 'msg': '未知 action'})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_get_database(self):
+                try:
+                    from .constants import DB_PATH, DATA_DIR
+                    import os
+                    db_file = DB_PATH
+                    size = db_file.stat().st_size if db_file.exists() else 0
+                    # 获取记录数
+                    count = 0
+                    if bridge._data_store:
+                        try:
+                            import sqlite3
+                            conn = sqlite3.connect(str(db_file))
+                            cur = conn.cursor()
+                            cur.execute('SELECT COUNT(*) FROM usage_records')
+                            count = cur.fetchone()[0]
+                            conn.close()
+                        except Exception:
+                            pass
+                    self._respond(200, {
+                        'ok': True,
+                        'db_size': size,
+                        'db_size_mb': round(size / 1024 / 1024, 2),
+                        'record_count': count,
+                    })
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_post_database(self):
+                try:
+                    body = self._read_body()
+                    action = body.get('action', '')
+                    if action == 'cleanup':
+                        days = body.get('days', 90)
+                        if bridge._data_store:
+                            bridge._data_store.cleanup_old_data(days)
+                            self._respond(200, {'ok': True, 'msg': f'已清理 {days} 天前的数据'})
+                        else:
+                            self._respond(503, {'ok': False, 'msg': '服务未就绪'})
+                    elif action == 'backup':
+                        import shutil
+                        from .constants import DB_PATH, DATA_DIR
+                        backup_path = DB_PATH.with_suffix('.backup.db')
+                        if DB_PATH.exists():
+                            shutil.copy2(DB_PATH, backup_path)
+                            self._respond(200, {'ok': True, 'backup_path': str(backup_path)})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '数据库文件不存在'})
+                    else:
+                        self._respond(400, {'ok': False, 'msg': '未知 action'})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_get_feedback_logs(self):
+                try:
+                    from .constants import LOG_DIR
+                    logs = []
+                    if LOG_DIR.exists():
+                        for f in sorted(LOG_DIR.glob('*.log'), reverse=True)[:10]:
+                            logs.append({'name': f.name, 'size': f.stat().st_size})
+                    self._respond(200, {'ok': True, 'logs': logs})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
+
+            def _api_post_export_pdf(self):
                 try:
                     length = int(self.headers.get('Content-Length', 0))
                     body = json.loads(self.rfile.read(length))
@@ -157,22 +558,43 @@ class BridgeHandler:
                             'msg': '导出 PDF 失败，请手动 Ctrl+P 打印为 PDF'})
                 except Exception as e:
                     logger.error('PDF 导出请求失败: %s', e)
-                    self._respond(500, {'ok': False, 'msg': str(e)})  # 连接已断开，忽略二次写入错误
+                    self._respond(500, {'ok': False, 'msg': str(e)})
 
-            def do_OPTIONS(self):
-                self.send_response(204)
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-                self.end_headers()
+            def _api_post_feedback(self):
+                try:
+                    body = self._read_body()
+                    desc = body.get('description', '')
+                    contact = body.get('contact', '')
+                    if not desc:
+                        self._respond(400, {'ok': False, 'msg': '描述不能为空'})
+                        return
+                    from .constants import FEEDBACK_DIR
+                    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+                    import datetime
+                    fname = FEEDBACK_DIR / f'feedback_{datetime.datetime.now():%Y%m%d_%H%M%S}.json'
+                    with open(fname, 'w', encoding='utf-8') as f:
+                        json.dump({
+                            'description': desc,
+                            'contact': contact,
+                            'time': datetime.datetime.now().isoformat(),
+                        }, f, ensure_ascii=False, indent=2)
+                    self._respond(200, {'ok': True, 'msg': '反馈已提交'})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
 
-            def _respond(self, code, data):
-                self.send_response(code)
-                self.send_header('Content-Type', 'application/json; charset=utf-8')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+            def _api_check_update(self):
+                try:
+                    from .version import VERSION
+                    from .updater import check_update
+                    info = check_update(VERSION)
+                    if info:
+                        self._respond(200, {'ok': True, 'update': info})
+                    else:
+                        self._respond(200, {'ok': True, 'update': None})
+                except Exception as e:
+                    self._respond(500, {'ok': False, 'msg': str(e)})
 
+            # ── 日志 ──
             def log_message(self, fmt, *args):
                 logger.debug('bridge-http: ' + fmt, *args)
 

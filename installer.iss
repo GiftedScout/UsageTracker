@@ -2,7 +2,7 @@
 ; 版本: 0.2.0
 
 #define MyAppName "UsageTracker"
-#define MyAppVersion "0.2.0-beta"
+#define MyAppVersion "0.3.0"
 #define MyAppPublisher "chaos"
 #define MyAppURL ""
 #define MyAppExeName "UsageTracker.exe"
@@ -67,6 +67,8 @@ Name: "startupicon"; Description: "{cm:StartupIcon}"; Flags: checkedonce
 [Files]
 ; 程序文件：忽略版本号（允许覆盖升级），用户数据目录排除不覆盖
 Source: "dist\UsageTracker\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "config\*,data\*,reports\*,logs\*,bridge\*,feedback\*"
+; 网页端设置界面文件
+Source: "ui\web\*"; DestDir: "{app}\ui\web"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Dirs]
 ; 确保数据子目录结构存在
