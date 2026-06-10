@@ -23,6 +23,9 @@
 
 ---
 
+> [!NOTE]
+> **Linux support has started.** The current `linux-port` / `v0.4.0` prerelease is source-only and intended for early Linux testing on X11/XWayland. Windows installer releases are kept as historical versions.
+
 ## 🎯 Quick Start (Source Code)
 
 > **Linux-first, no exe, no installer — just git clone and run.**

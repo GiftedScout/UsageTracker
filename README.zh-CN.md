@@ -23,6 +23,9 @@
 
 ---
 
+> [!NOTE]
+> **Linux 版本已经开始开发。** 当前 `linux-port` / `v0.4.0` 预发布版为源码分发，面向 X11/XWayland Linux 桌面早期测试；Windows 安装包版本保留为历史版本。
+
 ## 🎯 快速上手（源码运行）
 
 > **Linux 优先，无 exe、无安装包，git clone 即可运行。**
