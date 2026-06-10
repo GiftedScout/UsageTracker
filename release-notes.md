@@ -1,3 +1,32 @@
+## UsageTracker v0.4.0-prerelease
+
+**Linux-first 预发布版：源码运行、后台守护进程、WebUI 设置与 XDG 路径适配。**
+
+### 主要变化
+
+- 新增 `bin/usagetracker` Linux CLI 包装器，支持 `daemon` / `status` / `stop` / `web` / `today`
+- 迁移到 Linux/XDG 用户目录：配置、数据、日志、报告不再依赖 Windows 路径
+- 支持 X11/XWayland 活动窗口轮询追踪，避免 Windows 事件钩子崩溃路径
+- 修复浏览器识别、忽略名单迁移、WebUI 数据兼容等 Linux 移植问题
+- 单实例锁增强：`status` 不再破坏锁，`stop` 可在 PID 文件为空时从 `/proc/locks` 找到守护进程
+- Linux 通知、开机自启、报告打开方式适配
+
+### 升级/运行说明
+
+```bash
+git clone https://github.com/GiftedScout/UsageTracker.git
+cd UsageTracker
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+./bin/usagetracker daemon
+./bin/usagetracker web
+```
+
+> 这是 Linux 预发布版本，推荐在 X11/XWayland 会话下测试；暂不提供 Windows exe 安装包。
+
+---
+
 ## UsageTracker v0.3.0
 
 **网页端设置界面正式上线，GUI 窗口模式已弃用。**

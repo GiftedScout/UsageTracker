@@ -1,32 +1,23 @@
 """版本号"""
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 APP_NAME = "UsageTracker"
 
 RELEASE_NOTES = """\
-版本 v0.3.0
+版本 v0.4.0-prerelease
 
-新增功能
-• 网页端设置界面：弃用 tkinter GUI，改用浏览器访问本地页面
-• 双主题支持：童话（温暖柔和）/ 极客（暗色酷炫）一键切换
-• 所有 v0.2.0 功能完整迁移：通用/分类/浏览器/游戏/忽略/数据库/反馈
-• Bridge HTTP 服务扩展：/settings 页面 + 完整 REST API
-• 主题持久化：网页主题选择自动保存，下次打开保持
+Linux 预发布版
+• Linux-first 源码运行：新增 bin/usagetracker CLI 包装器，支持 daemon/status/stop/web/today
+• XDG 路径适配：配置、数据、日志、报告迁移到 Linux 用户目录
+• 活动窗口追踪：支持 X11/XWayland 环境，保留轮询模式避免事件钩子崩溃
+• WebUI 与浏览器识别：兼容 Linux 进程信息结构，修复浏览器识别异常
+• 忽略名单迁移：自动清理 Windows 默认 exe 残留，改用 Linux 默认忽略项
+• 单实例与守护进程：锁文件不再被状态检查误清空，stop/status 可从 /proc/locks 兜底识别 PID
+• 通知/启动项/报告：适配 notify-send、XDG autostart 与 Linux 文件打开方式
 
-界面改进
-• 响应式布局：侧边栏 + 右侧内容区，支持移动端折叠
-• 童话主题：浅色渐变、大圆角卡片、温暖配色
-• 极客主题：深海军蓝渐变、发光效果、等宽字体
-• Toast 通知：操作反馈更直观
-
-架构改进
-• 弃用 tkinter 设置窗口，减少依赖和崩溃点
-• 设置入口改为打开浏览器（http://127.0.0.1:19234/settings）
-• 静态文件服务：CSS/JS/图标通过 /static/ 提供
-
-修复内容
-• 修复 tkinter 设置窗口崩溃、白屏、布局错乱等问题
-• 移除 ui/settings_window.py 依赖（保留文件兼容旧配置）
+注意
+• 这是 Linux 预发布版本，当前推荐在 X11/XWayland 会话下使用。
+• 暂不提供 Windows 安装包；请通过 git clone + pip install 源码运行。
 """
 
 

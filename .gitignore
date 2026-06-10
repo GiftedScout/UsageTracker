@@ -36,3 +36,5 @@ Desktop.ini
 
 # WorkBuddy
 .workbuddy/
+# Runtime update cache (can be created literally on Linux when Windows temp env is absent)
+%TEMP%/

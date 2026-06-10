@@ -1,3 +1,20 @@
+# ============================================================
+# UsageTracker - Linux-first 依赖清单
+# ============================================================
+# 安装方式：
+#   pip install -r requirements.txt              # 安装全部（含托盘）
+#   pip install psutil                            # 最小运行（CLI/WebUI daemon）
+#
+# 系统工具（需 apt install，非 pip）：
+#   xprop          — X11/XWayland 前台窗口检测（必需）
+#   notify-send    — Ubuntu 桌面通知（可选，无则退化为日志）
+# ============================================================
+
+# ---- 核心依赖（CLI daemon + WebUI 必需） ----
 psutil>=5.9.0
+
+# ---- 可选依赖（系统托盘图标，非阻断） ----
+# Linux 下需要 libayatana-appindicator3 或 trayer/tint2 等系统托盘
+# 纯 CLI/headless 模式无需安装，daemon 正常运行
 pystray>=0.19.0
 Pillow>=10.0.0

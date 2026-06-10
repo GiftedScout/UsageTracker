@@ -10,7 +10,7 @@ from src.version import VERSION
 from .tab_general import TabGeneral
 from .tab_categories import TabCategories
 from .tab_browsers import TabBrowsers
-from .tab_games import TabGames
+from .tab_projects import TabProjects
 from .tab_ignore import TabIgnore
 from .tab_database import TabDatabase
 from .tab_feedback import TabFeedback
@@ -28,7 +28,7 @@ SIDEBAR_ITEMS = [
     ('settings.general',    '⚙', TabGeneral),
     ('settings.categories', '📁', TabCategories),
     ('settings.browsers',   '🌐', TabBrowsers),
-    ('settings.games',      '🎮', TabGames),
+    ('settings.projects',   '📂', TabProjects),
     ('settings.ignore',     '🚫', TabIgnore),
     ('settings.database',   '🗄', TabDatabase),
     ('settings.feedback',   '📝', TabFeedback),
@@ -114,7 +114,7 @@ class SettingsWindow:
             (t('settings.general'), TabGeneral),
             (t('settings.categories'), TabCategories),
             (t('settings.browsers'), TabBrowsers),
-            (t('settings.games'), TabGames),
+            (t('settings.projects'), TabProjects),
             (t('settings.ignore'), TabIgnore),
             (t('settings.database'), TabDatabase),
             (t('settings.feedback'), TabFeedback),
@@ -281,7 +281,7 @@ class SettingsWindow:
         elif cls is TabBrowsers:
             return {'config_manager': self._config,
                     'app_classifier': self._classifier}
-        elif cls is TabGames:
+        elif cls is TabProjects:
             return {'app_classifier': self._classifier,
                     'config_manager': self._config}
         elif cls is TabIgnore:

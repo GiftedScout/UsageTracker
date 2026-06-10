@@ -1,41 +1,42 @@
-﻿"""
+"""
 系统托盘应用
 - pystray 托盘图标和右键菜单
 - 左键打开设置，双击打开日报
 - Tooltip 每 30 秒刷新
 - v0.3.0+ 已弃用 tkinter，全部改用 webbrowser / ctypes MessageBox
+- Linux Phase1: pystray/Pillow 延迟导入，缺失时模块级不崩溃
 """
 
 import logging
 import threading
-import ctypes
 from datetime import date, timedelta
 from typing import Callable
 
-from PIL import Image
-import pystray
+# 延迟导入：pystray/Pillow 仅在使用托盘时按需加载
+# from PIL import Image    ← moved into __init__
+# import pystray           ← moved into __init__
 
 from .version import VERSION, APP_NAME, RELEASE_NOTES
 from .i18n import t
+from .platform_utils import show_message
 
 logger = logging.getLogger(__name__)
 
 
 def _message_box(title: str, text: str, style: int = 0x40) -> int:
-    """系统消息框（替代 tkinter，避免 venv 中 Tcl/Tk 缺失导致崩溃）"""
-    try:
-        return ctypes.windll.user32.MessageBoxW(0, text, title, style)
-    except Exception as e:
-        logger.error('MessageBox fail: %s', e)
-        return 0
+    """跨平台提示（Windows MessageBox / Linux notify-send / 控制台日志）。"""
+    return 1 if show_message(title, text, style) else 0
 
 
 class TrayApp:
     """系统托盘应用"""
 
-    def __init__(self, icon_image: Image.Image, data_store=None,
+    def __init__(self, icon_image, data_store=None,
                  config_manager=None, report_generator=None,
                  on_settings=None, on_quit=None, exe_path: str = ''):
+        # 延迟导入 pystray，确保模块级不崩溃
+        import pystray
+
         self._data_store = data_store
         self._config = config_manager
         self._report_gen = report_generator
@@ -175,8 +176,8 @@ class TrayApp:
                 if report:
                     from .data_store import DataStore
                     b = DataStore.format_duration(report.browser_seconds)
-                    g = DataStore.format_duration(report.game_seconds)
-                    self.icon.title = f"UsageTracker | {t('tray.tooltip_yesterday', browser=b, game=g)}"
+                    d = DataStore.format_duration(report.development_seconds)
+                    self.icon.title = f"UsageTracker | {t('tray.tooltip_yesterday', browser=b, development=d)}"
                 else:
                     self.icon.title = f"{APP_NAME} | {t('tray.tooltip_no_data')}"
         except Exception as e:

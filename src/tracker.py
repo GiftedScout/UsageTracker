@@ -13,6 +13,8 @@ from typing import Optional, Callable, Dict
 
 import psutil
 
+from .platform_utils import IS_WINDOWS, get_foreground_window_info
+
 logger = logging.getLogger(__name__)
 
 EVENT_SYSTEM_FOREGROUND = 0x0003
@@ -73,6 +75,9 @@ class UsageTracker:
         self._lock = threading.Lock()
 
     def _load_winapi(self) -> None:
+        if not IS_WINDOWS:
+            self.user32 = None
+            return
         self.user32 = ctypes.windll.user32
         self.user32.GetForegroundWindow.restype = ctypes.wintypes.HWND
         self.user32.GetWindowThreadProcessId.argtypes = [
@@ -89,7 +94,9 @@ class UsageTracker:
     # ── 事件驱动钩子 ────────────────────────────────────────
 
     def _get_window_info(self) -> Optional[Dict]:
-        """Get info for a specific hwnd or current foreground window."""
+        """Get info for current foreground window (Win32 or platform fallback)."""
+        if not IS_WINDOWS:
+            return get_foreground_window_info()
         try:
             hwnd = self.user32.GetForegroundWindow()
             return self._build_window_info(hwnd)
@@ -98,6 +105,8 @@ class UsageTracker:
             return None
 
     def _build_window_info(self, hwnd) -> Optional[Dict]:
+        if not IS_WINDOWS:
+            return None
         if not hwnd:
             return None
         pid = ctypes.wintypes.DWORD()
@@ -328,29 +337,39 @@ class UsageTracker:
         self.is_running = True
         self._stop_event.clear()
 
-        # 确定模式
+        # Linux/other Phase1：统一轮询平台封装，避免触碰 Win32 API。
         mode = self._detection_mode
-        if mode == 'polling':
-            logger.info('启动轮询追踪（check_interval=%ds）', self.check_interval)
+        if not IS_WINDOWS:
+            if mode == 'event':
+                logger.warning('非 Windows 暂不支持事件驱动，降级为轮询')
+            logger.info('启动平台轮询追踪（check_interval=%ds）', self.check_interval)
             self._actual_mode = 'polling'
             self._thread = threading.Thread(target=self._polling_loop,
                                             daemon=True)
             self._thread.start()
-        else:
-            # auto / event — 先尝试事件驱动
-            self._actual_mode = 'event'
-            self._event_thread = threading.Thread(
-                target=self._event_message_loop, daemon=True, name='event-hook')
-            self._event_thread.start()
-            self._hook_ready.wait(timeout=2)
+            return
 
-            if self._actual_mode == 'polling':
-                # 钩子失败，启动轮询
-                self._thread = threading.Thread(target=self._polling_loop,
-                                                daemon=True)
-                self._thread.start()
-            else:
-                # 事件驱动成功，额外启动健康监控
+        # 确定模式
+        if mode == 'polling':
+            logger.info('启动轮询追踪（check_interval=%ds）', self.check_interval)
+            self._actual_mode = 'polling'
+            self._load_winapi()
+            self._thread = threading.Thread(target=self._polling_loop,
+                                            daemon=True)
+            self._thread.start()
+        else:
+            # auto 或 event：先尝试事件驱动
+            try:
+                self._load_winapi()
+                self._event_thread = threading.Thread(
+                    target=self._event_message_loop, daemon=True,
+                    name='win-event-hook')
+                self._event_thread.start()
+                # 等待事件循环 ready（最多 2 秒）
+                if not self._hook_ready.wait(timeout=2):
+                    raise RuntimeError('event hook not ready')
+                self._actual_mode = 'event'
+                logger.info('启动事件驱动追踪')
                 self._health_thread = threading.Thread(
                     target=self._monitor_event_health, daemon=True,
                     name='event-health')
@@ -362,6 +381,15 @@ class UsageTracker:
                     name='heartbeat')
                 self._heartbeat_thread.start()
                 logger.info('事件驱动追踪已启动')
+            except Exception as e:
+                if mode == 'event':
+                    logger.error('事件驱动启动失败，降级轮询: %s', e)
+                else:
+                    logger.warning('事件驱动不可用，自动降级轮询: %s', e)
+                self._actual_mode = 'polling'
+                self._thread = threading.Thread(target=self._polling_loop,
+                                                daemon=True)
+                self._thread.start()
 
     def _heartbeat_loop(self):
         """心跳：定期更新当前 session 的 duration 秒数"""
@@ -379,7 +407,7 @@ class UsageTracker:
         self.is_running = False
 
         # 发送 WM_QUIT 以退出事件消息循环
-        if self._event_thread and self._event_thread.is_alive():
+        if IS_WINDOWS and self._event_thread and self._event_thread.is_alive():
             try:
                 ctypes.windll.user32.PostQuitMessage(0)
             except Exception:

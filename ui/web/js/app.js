@@ -26,11 +26,26 @@ const API = {
     }),
 };
 
+// Keep WebUI auto-detection aligned with the classifier's cross-platform defaults.
+const KNOWN_BROWSER_PROCESS_NAMES = [
+    // Windows
+    'msedge.exe', 'chrome.exe', 'firefox.exe', 'brave.exe', 'opera.exe', 'vivaldi.exe', 'arc.exe',
+    // Linux
+    'firefox', 'firefox-esr', 'firefox-developer', 'icecat', 'librewolf',
+    'chromium', 'chromium-browser', 'chrome', 'google-chrome', 'google-chrome-stable',
+    'brave', 'brave-browser', 'brave-browser-stable',
+    'opera', 'opera-browser', 'vivaldi', 'vivaldi-bin',
+    'microsoft-edge', 'microsoft-edge-dev', 'microsoft-edge-stable', 'msedge',
+    'epiphany', 'epiphany-browser', 'gnome-web', 'org.gnome.epiphany',
+    'midori', 'falkon', 'konqueror', 'qutebrowser', 'nyxt', 'luakit',
+    'floorp', 'zen', 'thorium-browser', 'ungoogled-chromium',
+];
+
 /* ---- i18n ---- */
 const I18N = {
     'zh-CN': {
         'nav.general': '通用', 'nav.categories': '分类', 'nav.browsers': '浏览器',
-        'nav.games': '游戏', 'nav.ignore': '忽略', 'nav.database': '数据库', 'nav.feedback': '反馈',
+        'nav.projects': '项目', 'nav.ignore': '忽略', 'nav.database': '数据库', 'nav.feedback': '反馈',
         'general.title': '通用设置', 'general.language': '语言', 'general.auto_start': '开机自启动',
         'general.auto_report': '自动显示昨日报告', 'general.detection_mode': '检测模式',
         'general.check_update': '自动检查更新', 'general.web_theme': '网页主题',
@@ -51,10 +66,10 @@ const I18N = {
         'browsers.exe_placeholder': '如 C:\\app\\chrome.exe（留空匹配所有）',
         'browsers.url_placeholder': '如 github.com（留空匹配所有）',
         'browsers.add_rule': '添加规则', 'browsers.auto_label': '已自动检测到以下浏览器：',
-        'games.title': '游戏目录', 'games.desc': '配置游戏可执行文件所在目录（Steam 游戏自动扫描无需手动添加）',
-        'games.no_dirs': '暂无游戏目录',
-        'games.dir_placeholder': '游戏目录路径（如 D:\\Steam\\steamapps\\common）',
-        'games.auto_label': '已自动扫描到以下游戏：',
+        'projects.title': '项目目录', 'projects.desc': '配置常用开发/工作项目目录，用于后续 Linux-first 项目上下文分析',
+        'projects.no_dirs': '暂无项目目录',
+        'projects.dir_placeholder': '项目目录路径（如 /home/me/src/my-project）',
+        'projects.suggestions_label': '分类建议（来自未分类的高频应用）：',
         'ignore.title': '忽略列表', 'ignore.desc': '被忽略的应用不会计入使用时长',
         'ignore.no_apps': '暂无忽略的应用',
         'ignore.path_placeholder': '应用路径（如 C:\\Windows\\System32\\cmd.exe）',
@@ -72,7 +87,7 @@ const I18N = {
         'process_picker.title': '选择进程', 'process_picker.search': '搜索进程...',
         'process_picker.close': '取消',
         'btn.add': '添加', 'btn.remove': '删除', 'btn.from_process': '从进程选择',
-        'cat.browser': '浏览器', 'cat.game': '游戏', 'cat.dev': '开发工具',
+        'cat.browser': '浏览器', 'cat.development': '开发工具', 'cat.dev': '开发工具',
         'cat.communication': '通讯工具', 'cat.entertainment': '影音娱乐',
         'toast.saved': '设置已保存', 'toast.added': '已添加',
         'toast.removed': '已移除', 'toast.empty': '请填写内容',
@@ -85,7 +100,7 @@ const I18N = {
     },
     'en': {
         'nav.general': 'General', 'nav.categories': 'Categories', 'nav.browsers': 'Browsers',
-        'nav.games': 'Games', 'nav.ignore': 'Ignore', 'nav.database': 'Database', 'nav.feedback': 'Feedback',
+        'nav.projects': 'Projects', 'nav.ignore': 'Ignore', 'nav.database': 'Database', 'nav.feedback': 'Feedback',
         'general.title': 'General Settings', 'general.language': 'Language',
         'general.auto_start': 'Auto Start', 'general.auto_report': 'Auto Show Daily Report',
         'general.detection_mode': 'Detection Mode', 'general.check_update': 'Auto Check Updates',
@@ -108,11 +123,11 @@ const I18N = {
         'browsers.exe_placeholder': 'e.g. C:\\app\\chrome.exe (leave empty for all)',
         'browsers.url_placeholder': 'e.g. github.com (leave empty for all)',
         'browsers.add_rule': 'Add Rule', 'browsers.auto_label': 'Auto-detected browsers:',
-        'games.title': 'Game Directories',
-        'games.desc': 'Configure game executable directories (Steam games are auto-scanned)',
-        'games.no_dirs': 'No game directories',
-        'games.dir_placeholder': 'Game directory (e.g. D:\\Steam\\steamapps\\common)',
-        'games.auto_label': 'Auto-scanned games:',
+        'projects.title': 'Project Directories',
+        'projects.desc': 'Configure frequently used development/work project directories for Linux-first context analysis',
+        'projects.no_dirs': 'No project directories',
+        'projects.dir_placeholder': 'Project directory (e.g. /home/me/src/my-project)',
+        'projects.suggestions_label': 'Category suggestions (from uncategorized high-usage apps):',
         'ignore.title': 'Ignore List',
         'ignore.desc': 'Ignored apps will not be counted in usage time',
         'ignore.no_apps': 'No ignored apps',
@@ -133,7 +148,7 @@ const I18N = {
         'process_picker.search': 'Search process name...',
         'process_picker.close': 'Cancel',
         'btn.add': 'Add', 'btn.remove': 'Remove', 'btn.from_process': 'From process',
-        'cat.browser': 'Browser', 'cat.game': 'Game', 'cat.dev': 'Dev Tools',
+        'cat.browser': 'Browser', 'cat.development': 'Development', 'cat.dev': 'Dev Tools',
         'cat.communication': 'Communication', 'cat.entertainment': 'Entertainment',
         'toast.saved': 'Settings saved', 'toast.added': 'Added',
         'toast.removed': 'Removed', 'toast.empty': 'Please fill in the field',
@@ -152,7 +167,7 @@ function t(key) {
 }
 
 function translateCatName(cat) {
-    const builtin = { browser: 'cat.browser', game: 'cat.game', dev: 'cat.dev',
+    const builtin = { browser: 'cat.browser', dev: 'cat.dev',
                       communication: 'cat.communication', entertainment: 'cat.entertainment' };
     if (cat.id && builtin[cat.id]) return t(builtin[cat.id]);
     return cat.name || cat.id;
@@ -185,7 +200,7 @@ function applyLanguage(lang) {
         const tab = activeTab.dataset.tab;
         if (tab === 'categories') loadCategories();
         else if (tab === 'browsers') loadBrowserRules();
-        else if (tab === 'games') loadGameDirs();
+        else if (tab === 'projects') loadProjectDirs();
         else if (tab === 'ignore') loadIgnoredApps();
     }
 }
@@ -215,7 +230,7 @@ document.querySelectorAll('.nav-item').forEach(btn => {
         if (tabEl) tabEl.classList.add('active');
         if (tab === 'categories') loadCategories();
         if (tab === 'browsers') loadBrowserRules();
-        if (tab === 'games') loadGameDirs();
+        if (tab === 'projects') loadProjectDirs();
         if (tab === 'ignore') loadIgnoredApps();
         if (tab === 'database') loadDatabaseInfo();
         if (tab === 'feedback') loadCrashLogs();
@@ -635,17 +650,17 @@ if (btnAddIgnore) {
     });
 }
 
-/* ---- Game Dirs ---- */
-async function loadGameDirs() {
+/* ---- Project Dirs ---- */
+async function loadProjectDirs() {
     try {
-        const data = await API.get('/api/games');
+        const data = await API.get('/api/projects');
         if (!data || !data.ok) return;
-        const list = document.getElementById('game-dirs-list');
+        const list = document.getElementById('project-dirs-list');
         if (!list) return;
         list.innerHTML = '';
-        const dirs = data.game_dirs || [];
+        const dirs = data.project_dirs || [];
         if (dirs.length === 0) {
-            list.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;">${t('games.no_dirs')}</p>`;
+            list.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;">${t('projects.no_dirs')}</p>`;
         }
         dirs.forEach(d => {
             const div = document.createElement('div');
@@ -655,20 +670,20 @@ async function loadGameDirs() {
                 <button class="btn-small" data-dir="${d}">${t('btn.remove')}</button>
             `;
             div.querySelector('.btn-small').addEventListener('click', async () => {
-                await API.post('/api/games', { action: 'remove_dir', dir: d });
+                await API.post('/api/projects', { action: 'remove_dir', dir: d });
                 toast(t('toast.removed'));
-                loadGameDirs();
+                loadProjectDirs();
             });
             list.appendChild(div);
         });
-        // Show auto-detected games (from classifier, not steamapps path filter)
-        const detectedEl = document.getElementById('detected-games');
+        // Show category suggestions from uncategorized high-usage apps
+        const detectedEl = document.getElementById('classifier-suggestions');
         if (detectedEl) {
             try {
-                const classData = await API.get('/api/classifier-games');
-                if (classData && classData.ok && classData.games && classData.games.length > 0) {
-                    detectedEl.innerHTML = `<strong>${t('games.auto_label')}</strong><br>` +
-                        classData.games.map(g => `${g.name} (${g.exe})`).join(', ');
+                const classData = await API.get('/api/classifier-suggestions');
+                if (classData && classData.ok && classData.suggestions && classData.suggestions.length > 0) {
+                    detectedEl.innerHTML = `<strong>${t('projects.suggestions_label')}</strong><br>` +
+                        classData.suggestions.map(s => `${s.app_name} (${s.exe_path || '-'})`).join(', ');
                     detectedEl.style.display = 'block';
                 } else {
                     detectedEl.style.display = 'none';
@@ -676,21 +691,21 @@ async function loadGameDirs() {
             } catch (e) { /* silent */ }
         }
     } catch (e) {
-        console.error('[loadGameDirs] error:', e);
+        console.error('[loadProjectDirs] error:', e);
     }
 }
 
-const btnAddGameDir = document.getElementById('btn-add-game-dir');
-if (btnAddGameDir) {
-    btnAddGameDir.addEventListener('click', async () => {
-        const d = document.getElementById('new-game-dir').value.trim();
+const btnAddProjectDir = document.getElementById('btn-add-project-dir');
+if (btnAddProjectDir) {
+    btnAddProjectDir.addEventListener('click', async () => {
+        const d = document.getElementById('new-project-dir').value.trim();
         if (!d) { toast(t('toast.empty')); return; }
         try {
-            const data = await API.post('/api/games', { action: 'add_dir', dir: d });
+            const data = await API.post('/api/projects', { action: 'add_dir', dir: d });
             if (data && data.ok) {
                 toast('✅ ' + t('toast.added'));
-                document.getElementById('new-game-dir').value = '';
-                loadGameDirs();
+                document.getElementById('new-project-dir').value = '';
+                loadProjectDirs();
             } else {
                 toast('❌ ' + (data ? data.msg : 'Failed'));
             }
@@ -735,10 +750,8 @@ async function loadBrowserRules() {
             try {
                 const procData = await API.get('/api/processes');
                 if (procData && procData.ok) {
-                    const browserNames = ['msedge.exe', 'chrome.exe', 'firefox.exe',
-                        'brave.exe', 'opera.exe', 'vivaldi.exe', 'arc.exe'];
                     const detected = procData.processes.filter(p =>
-                        browserNames.includes(p.name.toLowerCase())
+                        KNOWN_BROWSER_PROCESS_NAMES.includes((p.name || '').toLowerCase())
                     );
                     if (detected.length > 0) {
                         detectedEl.innerHTML = `<strong>${t('browsers.auto_label')}</strong><br>` +

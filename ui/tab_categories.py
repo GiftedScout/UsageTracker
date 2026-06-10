@@ -28,7 +28,7 @@ class TabCategories(ttk.Frame):
         preset_frame = ttk.Frame(self)
         preset_frame.grid(row=1, column=0, sticky='ew', padx=24, pady=2)
         for i, (cat_id, key) in enumerate([
-            ('browser', 'categories.browser'), ('game', 'categories.game'), ('other', 'categories.other'),
+            ('browser', 'categories.browser'), ('development', 'categories.development'), ('other', 'categories.other'),
         ]):
             ttk.Label(preset_frame, text=f'  {t(key)}', foreground='#555').grid(
                 row=i // 3, column=i % 3, sticky='w', padx=8)

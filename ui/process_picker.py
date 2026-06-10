@@ -22,7 +22,7 @@ class ProcessPicker(tk.Toplevel):
     参数
     ----
     exe_only : bool
-        若为 True，result['exe'] 只返回进程文件名（不含路径），适合游戏管理。
+        若为 True，result['exe'] 只返回进程文件名（不含路径），适合仅按可执行文件名匹配的规则配置。
     """
 
     def __init__(self, parent, exe_only: bool = False):

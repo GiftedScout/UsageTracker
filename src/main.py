@@ -1,23 +1,144 @@
 """
-UsageTracker 主入口
-- 单实例检测
-- 首次启动隐私声明
-- 初始化所有模块
-- 启动追踪 + 托盘
+UsageTracker 主入口 - Linux-first CLI
+- 命令行参数解析: daemon / status / stop / web / today
+- 单实例检测 | 首次启动隐私声明 | 初始化所有模块
+- 启动追踪（headless 模式默认不初始化托盘）
+- 保留 WebUI 设置界面 (http://127.0.0.1:19234)
 """
 
+import argparse
 import logging
 import os
+import signal
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
+
+# 兼容直接运行 `python3 src/main.py` 与模块运行 `python3 -m src.main`。
+# 直接运行时 sys.path 只包含 src/，需要把项目根目录加入后续 `from src...` 导入才可靠。
+if __package__ in (None, ''):
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+    if str(_PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(_PROJECT_ROOT))
 
 # 设置日志
 LOG_FORMAT = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
 LOG_LEVEL = logging.INFO
 
-# ---- 初始化日志 ----
+
+# ── 锁 / PID 文件路径（与 FileLockSingleInstance 保持一致） ──────────
+
+def _get_lock_path() -> Path:
+    """返回单实例锁文件路径（与 singleton.py 中一致）。"""
+    runtime = os.environ.get('XDG_RUNTIME_DIR')
+    if runtime:
+        lock_dir = Path(runtime)
+    else:
+        lock_dir = Path.home() / '.cache'
+    return lock_dir / 'UsageTracker.lock'
+
+
+def _read_pid_from_lock() -> int | None:
+    """读取锁文件中的 PID，若文件不存在或格式错误返回 None。"""
+    lock_path = _get_lock_path()
+    if not lock_path.exists():
+        return None
+    try:
+        pid_str = lock_path.read_text().strip()
+        return int(pid_str) if pid_str else None
+    except (ValueError, OSError):
+        return None
+
+
+def _get_lock_owner_pid() -> int | None:
+    """Linux: 当锁文件 PID 丢失时，从 /proc/locks 反查持锁进程 PID。"""
+    if os.name == 'nt':
+        return None
+    lock_path = _get_lock_path()
+    try:
+        st = lock_path.stat()
+        target_inode = str(st.st_ino)
+        target_dev_hex = f'{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}'
+        for line in Path('/proc/locks').read_text().splitlines():
+            parts = line.split()
+            # Example: 1: FLOCK ADVISORY WRITE 50500 00:33:176 0 EOF
+            if len(parts) < 6:
+                continue
+            pid_text = parts[4]
+            dev_inode = parts[5]
+            fields = dev_inode.split(':')
+            if len(fields) < 3:
+                continue
+            dev_hex = ':'.join(fields[:2]).lower()
+            inode = fields[2]
+            if inode == target_inode and dev_hex == target_dev_hex:
+                pid = int(pid_text)
+                return pid if _is_pid_alive(pid) else None
+    except Exception:
+        return None
+    return None
+
+
+def _cleanup_lock_file() -> None:
+    """Best-effort 清理未被持有的旧锁文件。"""
+    lock_path = _get_lock_path()
+    try:
+        lock_path.unlink(missing_ok=True)
+    except OSError:
+        # 状态命令不应因清理失败而阻断；下次 daemon 获取 fcntl 锁仍可覆盖。
+        pass
+
+
+def _is_pid_alive(pid: int | None) -> bool:
+    """用 psutil 判活，避免 os.kill(pid, 0) 误判和规则禁用。"""
+    if pid is None or pid <= 0:
+        return False
+    try:
+        import psutil
+        proc = psutil.Process(pid)
+        return proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
+    except Exception:
+        return False
+
+
+def _get_daemon_lock_status() -> tuple[bool, int | None]:
+    """返回 (lock_held, pid)。
+
+    FileLockSingleInstance 使用 fcntl 记录真实单实例状态，进程正常退出后
+    可能留下包含旧 PID 的普通文件。因此 status/web 必须以 fcntl 锁是否仍被
+    持有为准，而不是只看 PID 文本。
+    """
+    lock_path = _get_lock_path()
+    if not lock_path.exists():
+        return False, None
+    pid = _read_pid_from_lock()
+    if os.name == 'nt':
+        return _is_pid_alive(pid), pid
+    try:
+        import fcntl
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(lock_path, 'a+') as fh:
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                if pid is None:
+                    pid = _get_lock_owner_pid()
+                return True, pid
+            else:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+                _cleanup_lock_file()
+                return False, pid
+    except Exception:
+        # fcntl 探测失败时降级到 psutil 判活；仍然不使用 os.kill(pid, 0)。
+        alive = _is_pid_alive(pid)
+        if not alive:
+            _cleanup_lock_file()
+        return alive, pid
+
+
+# ── 日志 ──────────────────────────────────────────────────────────────
+
 def _setup_logging():
     from src.constants import LOG_DIR
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -33,15 +154,17 @@ def _setup_logging():
     )
 
 
+# ── 图标（仅托盘使用，延迟导入 PIL） ──────────────────────────────
+
 def _create_icon():
     """创建托盘图标（优先 PNG，回退 ICO，最后程序化生成）"""
     if getattr(sys, 'frozen', False):
         base = Path(sys._MEIPASS)
     else:
         base = Path(__file__).resolve().parent.parent
-    from PIL import Image
+    from PIL import Image  # 延迟导入
 
-    # 优先用 PNG（最可靠，无 ICO 解析问题）
+    # 优先用 PNG
     png_path = base / 'assets' / 'logo.png'
     if png_path.exists():
         try:
@@ -73,19 +196,26 @@ def _create_icon():
     return img
 
 
+# ── 可执行路径 ──────────────────────────────────────────────────────
+
 def _get_exe_path():
     """获取可执行文件路径（用于启动管理）"""
     if getattr(sys, 'frozen', False):
         return sys.executable
     else:
-        return str(Path(__file__).resolve().parent.parent / 'UsageTracker.exe')
+        # Linux-first: 返回当前脚本路径
+        return str(Path(__file__).resolve())
 
 
-def _run_app():
-    """主应用逻辑"""
+# ══════════════════════════════════════════════════════════════════════
+#  命令实现
+# ══════════════════════════════════════════════════════════════════════
+
+def _run_daemon(headless: bool = True):
+    """主应用逻辑：追踪器 + Bridge HTTP + WebUI（可选托盘）"""
     _setup_logging()
     logger = logging.getLogger('main')
-    logger.info('UsageTracker 启动中...')
+    logger.info('UsageTracker 启动中... (headless=%s)', headless)
 
     from src.constants import migrate_from_legacy
     migrate_from_legacy()
@@ -95,9 +225,7 @@ def _run_app():
     instance = SingleInstance()
     if instance.already_running:
         logger.info('已有实例运行，退出')
-        import ctypes
-        from src.i18n import t
-        ctypes.windll.user32.MessageBoxW(0, t('singleton.running'), t('dialog.hint'), 0x40)
+        print('UsageTracker: 已有实例运行中。使用 "python -m src.main status" 查看状态。')
         return 0
 
     # 加载配置
@@ -107,8 +235,9 @@ def _run_app():
     config = ConfigManager()
 
     # 首次运行处理
-    # 用局部变量保存，供后续判断是否需要打开引导页
-    _need_onboarding = bool(getattr(config, 'first_run', True) or not getattr(config, 'privacy_accepted', False))
+    _need_onboarding = bool(
+        getattr(config, 'first_run', True) or not getattr(config, 'privacy_accepted', False)
+    )
 
     if config.first_run:
         logger.info('首次运行，清除首次运行标志')
@@ -124,7 +253,6 @@ def _run_app():
     from src.tracker import UsageTracker
     from src.notifier import UsageNotifier
     from src.bridge_handler import BridgeHandler
-    from src.crash_handler import CrashHandler
 
     data_store = DataStore()
     data_store.cleanup_expired_data(config.data_retention)
@@ -135,16 +263,18 @@ def _run_app():
     tracker = UsageTracker(check_interval=config.check_interval,
                             detection_mode='polling')
     notifier = UsageNotifier()
-    crash_handler = CrashHandler()
 
     # 启动管理
     _exe_path = _get_exe_path()
     import sys as _sys
     if getattr(_sys, 'frozen', False):
         _install_dir = Path(_exe_path).parent
-        _is_test_run = ('dist' in _install_dir.parts or
-                        str(_install_dir).lower().startswith(
-                            str(Path(__file__).resolve().parent.parent).lower()))
+        _is_test_run = (
+            'dist' in _install_dir.parts
+            or str(_install_dir).lower().startswith(
+                str(Path(__file__).resolve().parent.parent).lower()
+            )
+        )
     else:
         _is_test_run = True
     startup = StartupManager(exe_path=_exe_path)
@@ -153,12 +283,12 @@ def _run_app():
     elif config.auto_start and not startup.is_startup_enabled():
         startup.enable_startup()
 
-    # Bridge 通信（HTTP + 文件轮询）
+    # Bridge HTTP + 轮询
     bridge = BridgeHandler()
     bridge.start_http_server(config_manager=config, data_store=data_store, exe_path=_exe_path)
     bridge.start_polling(config_manager=config, data_store=data_store)
 
-    # 首次运行：Bridge 启动后打开引导页
+    # 首次运行：打开引导页
     if _need_onboarding and not getattr(config, '_onboarding_shown', False):
         def _open_onboarding():
             import time
@@ -244,10 +374,9 @@ def _run_app():
         except Exception as e:
             logger.error('打开浏览器失败: %s', e)
 
-    # 创建托盘
-    icon = _create_icon()
-    tray_app = None
+    # ── 退出事件 ───────────────────────────────────────────────────
     _shutdown_event = threading.Event()
+    _tray_app_ref = None
 
     def _on_quit():
         _shutdown_event.set()
@@ -259,34 +388,37 @@ def _run_app():
             _save_session_data(session)
         tracker.stop()
         bridge.stop_polling()
-        if tray_app:
-            tray_app.stop()
+        if _tray_app_ref:
+            _tray_app_ref.stop()
 
-    # 尝试启动托盘（失败不致命，HTTP 服务继续运行）
-    _tray_ok = False
-    try:
-        from src.tray_app import TrayApp
-        tray_app_obj = TrayApp(
-            icon_image=icon,
-            data_store=data_store,
-            config_manager=config,
-            report_generator=reporter,
-            on_settings=_open_settings,
-            on_quit=_on_quit,
-        )
-        tray_app = tray_app_obj
-        _tray_ok = True
-        logger.info('托盘图标初始化成功')
-    except Exception as e:
-        logger.error('托盘初始化失败（HTTP 服务继续运行）: %s', e, exc_info=True)
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(
-            0,
-            f'UsageTracker 托盘图标创建失败，程序将在后台运行。\n'
-            f'如需退出，请使用任务管理器。\n\n错误: {e}',
-            'UsageTracker - 警告',
-            0x40,
-        )
+    # ── 可选托盘 ───────────────────────────────────────────────────
+    if not headless:
+        try:
+            icon = _create_icon()
+            from src.tray_app import TrayApp
+            tray_app_obj = TrayApp(
+                icon_image=icon,
+                data_store=data_store,
+                config_manager=config,
+                report_generator=reporter,
+                on_settings=_open_settings,
+                on_quit=_on_quit,
+            )
+            _tray_app_ref = tray_app_obj
+            _tray_ok = True
+            logger.info('托盘图标初始化成功')
+        except Exception as e:
+            logger.error('托盘初始化失败（headless 模式继续运行）: %s', e, exc_info=True)
+            _tray_ok = False
+            print(f'UsageTracker: 托盘初始化失败（{e}），继续 headless 运行。')
+    else:
+        _tray_ok = False
+
+    # ── 启动追踪 ───────────────────────────────────────────────────
+    print(f'UsageTracker v{__import__("src.version", fromlist=["VERSION"]).VERSION} 已启动'
+          f' ({"headless" if headless else "with tray"})')
+    print(f'WebUI: http://127.0.0.1:19234')
+    print(f'停止: Ctrl+C 或运行 "python -m src.main stop"')
 
     try:
         tracker.start()
@@ -315,16 +447,13 @@ def _run_app():
                 config.save()
 
         if _tray_ok:
-            # 关键：托盘运行在独立线程，崩溃不影响主进程和 HTTP
             import time as _time
 
             def _tray_loop():
-                """托盘线程：pystray 崩溃时自动重启"""
                 local_tray = tray_app_obj
                 while not _shutdown_event.is_set():
                     try:
                         local_tray.run()
-                        # 正常退出（用户点了退出）
                         logger.info('托盘正常退出')
                         _shutdown_event.set()
                         break
@@ -352,7 +481,7 @@ def _run_app():
                 target=_tray_loop, daemon=False, name='tray-icon')
             _tray_thr.start()
 
-        # 主线程：等待退出信号（保持进程存活）
+        # 主线程：等待退出信号
         _shutdown_event.wait()
     except KeyboardInterrupt:
         pass
@@ -361,14 +490,183 @@ def _run_app():
         return 1
 
     logger.info('UsageTracker 已退出')
+    print('UsageTracker: 已停止')
     return 0
 
 
+def _run_status():
+    """检查运行状态并打印。"""
+    lock_held, pid = _get_daemon_lock_status()
+    if not lock_held:
+        if pid is None:
+            print('UsageTracker: 未运行')
+        else:
+            print(f'UsageTracker: 未运行（已清理旧锁 PID: {pid}）')
+        return 0
+    if pid is None:
+        print('UsageTracker: 运行中 (PID: unknown)')
+    else:
+        print(f'UsageTracker: 运行中 (PID: {pid})')
+    print(f'WebUI: http://127.0.0.1:19234')
+    return 0
+
+
+def _run_stop():
+    """停止运行中的 daemon。"""
+    lock_held, pid = _get_daemon_lock_status()
+    if not lock_held or pid is None:
+        print('UsageTracker: 未运行，无需停止')
+        return 0
+    try:
+        import psutil
+        proc = psutil.Process(pid)
+        proc.terminate()
+        print(f'UsageTracker: 已发送停止信号 (PID: {pid})')
+        return 0
+    except psutil.NoSuchProcess:
+        print(f'UsageTracker: 进程 {pid} 已不存在，清除锁文件...')
+        _cleanup_lock_file()
+        return 0
+    except psutil.AccessDenied:
+        print(f'UsageTracker: 无权限停止进程 {pid}，请手动执行: kill {pid}')
+        return 1
+    except Exception as exc:
+        print(f'UsageTracker: 停止进程 {pid} 失败: {exc}')
+        return 1
+
+
+def _run_web():
+    """打开 WebUI 设置页面。"""
+    import webbrowser
+    url = 'http://127.0.0.1:19234/settings'
+    lock_held, pid = _get_daemon_lock_status()
+    if not lock_held:
+        if pid is None:
+            print(f'UsageTracker: 未运行，WebUI 不可用')
+        else:
+            print(f'UsageTracker: 旧锁 PID {pid} 已清理，WebUI 不可用')
+        print(f'请先启动: python -m src.main daemon')
+        return 1
+    print(f'UsageTracker: 在浏览器中打开 {url}')
+    webbrowser.open(url)
+    return 0
+
+
+def _run_today():
+    """从数据库查询并打印今日使用统计。"""
+    # 仅在 daemon 模式下才初始化日志和模块；today 是独立查询
+    from src.data_store import DataStore
+    from src.config_manager import ConfigManager
+
+    try:
+        config = ConfigManager()
+        from src.i18n import init as init_i18n
+        init_i18n(config.language)
+        store = DataStore()
+        today_iso = date.today().isoformat()
+        records = store.get_daily_usage(today_iso)
+        if not records:
+            print(f'UsageTracker: {today_iso} 暂无使用记录')
+            return 0
+        total = sum(r.duration_seconds for r in records)
+        from src.data_store import DataStore as DS
+        print(f'📊 UsageTracker — {today_iso}')
+        print(f'{"─" * 40}')
+        print(f'总使用时长: {DS.format_duration(total)}')
+        by_cat: dict[str, float] = {}
+        for r in records:
+            by_cat[r.category] = by_cat.get(r.category, 0) + r.duration_seconds
+        for cat, secs in sorted(by_cat.items(), key=lambda x: -x[1]):
+            print(f'  {cat}: {DS.format_duration(secs)}')
+        print()
+        # Top 5 应用
+        from collections import Counter
+        app_counter = Counter()
+        for r in records:
+            app_counter[r.app_name] += r.duration_seconds
+        print('Top 应用:')
+        for app, secs in app_counter.most_common(5):
+            print(f'  {app}: {DS.format_duration(secs)}')
+        return 0
+    except Exception as e:
+        print(f'UsageTracker: 查询失败 — {e}')
+        return 1
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  CLI 入口
+# ══════════════════════════════════════════════════════════════════════
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog='python -m src.main',
+        description='UsageTracker — Linux-first 使用时长追踪工具',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+命令示例:
+  python -m src.main               启动 daemon（前台，headless 无托盘）
+  python -m src.main daemon        同上
+  python -m src.main daemon --tray 启动 daemon（带托盘，需 pystray+Pillow）
+  python -m src.main status        查看运行状态
+  python -m src.main stop          停止 daemon
+  python -m src.main web           打开 WebUI 设置页
+  python -m src.main today         查看今日使用统计
+        """,
+    )
+    parser.add_argument(
+        'command', nargs='?', default='daemon',
+        choices=['daemon', 'status', 'stop', 'web', 'today'],
+        help='操作命令（默认: daemon）',
+    )
+    parser.add_argument(
+        '--tray', action='store_true',
+        help='启用系统托盘（需 pystray + Pillow）',
+    )
+    return parser
+
+
 def main():
-    """入口函数（被 crash_handler 包装）"""
-    return _run_app()
+    """CLI 入口函数。"""
+    parser = _build_parser()
+    # 支持 -h / --help
+    if len(sys.argv) >= 2 and sys.argv[1] in ('-h', '--help'):
+        parser.print_help()
+        return 0
+
+    args = parser.parse_args()
+
+    if args.command == 'daemon':
+        return _run_daemon(headless=not args.tray)
+    elif args.command == 'status':
+        return _run_status()
+    elif args.command == 'stop':
+        return _run_stop()
+    elif args.command == 'web':
+        return _run_web()
+    elif args.command == 'today':
+        return _run_today()
+    return 0
+
+
+def _should_crash_wrap(argv: list[str] | None = None) -> bool:
+    """Only daemon runs should use crash-restart wrapping.
+
+    Short-lived CLI commands such as ``status`` and ``web`` may intentionally
+    return non-zero codes (for example when the daemon is not running).  Treating
+    those as crashes causes duplicate command output and spurious crash logs.
+    """
+    if argv is None:
+        argv = sys.argv[1:]
+    commands = {'daemon', 'status', 'stop', 'web', 'today'}
+    explicit_commands = [arg for arg in argv if arg in commands]
+    if not explicit_commands:
+        return True
+    return explicit_commands[0] == 'daemon'
 
 
 if __name__ == '__main__':
-    from src.crash_handler import CrashHandler
-    CrashHandler().wrap(main)
+    if _should_crash_wrap():
+        from src.crash_handler import CrashHandler
+        CrashHandler().wrap(main)
+    else:
+        sys.exit(main())

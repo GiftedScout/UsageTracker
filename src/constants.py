@@ -6,7 +6,27 @@ import os
 import sys
 from pathlib import Path
 
-from .version import VERSION, APP_NAME
+try:
+    from .version import VERSION, APP_NAME
+except ImportError:  # Direct module import used by lightweight verification tools
+    from version import VERSION, APP_NAME
+
+# ---- 平台检测 ----
+IS_LINUX = sys.platform.startswith('linux')
+IS_WINDOWS = sys.platform.startswith('win')
+
+# ---- XDG Base Directory 辅助函数 (Linux-first) ----
+def _linux_xdg_config_dir() -> Path:
+    return Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'usagetracker'
+
+def _linux_xdg_data_dir() -> Path:
+    return Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local' / 'share')) / 'usagetracker'
+
+def _linux_xdg_state_dir() -> Path:
+    return Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local' / 'state')) / 'usagetracker'
+
+def _linux_xdg_cache_dir() -> Path:
+    return Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache')) / 'usagetracker'
 
 # ---- 数据路径 ----
 # 所有数据统一放在安装目录下（打包模式）或项目根目录（开发模式）
@@ -20,29 +40,59 @@ else:
     _BASE_DIR = Path(__file__).resolve().parent.parent
     _INTERNAL_DIR = _BASE_DIR
 
-DATA_DIR = _BASE_DIR / 'data'
-CONFIG_DIR = _BASE_DIR / 'config'
-REPORT_DIR = _BASE_DIR / 'reports'
-LOG_DIR = _BASE_DIR / 'logs'
-CRASH_LOG_DIR = _BASE_DIR / 'logs'  # 崩溃日志和运行日志共用 logs/ 目录
-BRIDGE_DIR = _BASE_DIR / 'bridge'
-FEEDBACK_DIR = _BASE_DIR / 'feedback'
+# Linux-first: 在 Linux 上使用 XDG Base Directory 路径，合理兼容旧项目路径
+if IS_LINUX and not getattr(sys, 'frozen', False):
+    DATA_DIR = _linux_xdg_data_dir()
+    CONFIG_DIR = _linux_xdg_config_dir()
+    LOG_DIR = _linux_xdg_state_dir()
+    CRASH_LOG_DIR = _linux_xdg_state_dir()  # 崩溃日志和运行日志共用 state 目录
+    REPORT_DIR = _linux_xdg_data_dir() / 'reports'
+    BRIDGE_DIR = _linux_xdg_data_dir() / 'bridge'
+    FEEDBACK_DIR = _linux_xdg_data_dir() / 'feedback'
+    CLASSIFIER_CACHE_PATH = _linux_xdg_cache_dir() / 'classifier_cache.json'
+else:
+    DATA_DIR = _BASE_DIR / 'data'
+    CONFIG_DIR = _BASE_DIR / 'config'
+    REPORT_DIR = _BASE_DIR / 'reports'
+    LOG_DIR = _BASE_DIR / 'logs'
+    CRASH_LOG_DIR = _BASE_DIR / 'logs'  # 崩溃日志和运行日志共用 logs/ 目录
+    BRIDGE_DIR = _BASE_DIR / 'bridge'
+    FEEDBACK_DIR = _BASE_DIR / 'feedback'
+    CLASSIFIER_CACHE_PATH = _BASE_DIR / 'data' / 'classifier_cache.json'
+
 WEB_DIR = _INTERNAL_DIR / 'ui' / 'web'
-STEAM_CACHE_PATH = _BASE_DIR / 'data' / 'steam_games.json'
 INSTALL_DIR = _BASE_DIR
 BASE_DIR = _BASE_DIR  # 对外暴露，供 bridge 等模块使用
 
 DB_PATH = DATA_DIR / 'usage_data.db'
 CONFIG_PATH = CONFIG_DIR / 'config.json'
 
-# ---- 分类常量 ----
+# ---- 分类常量 (Linux-first 扩展) ----
 CATEGORY_BROWSER = 'browser'
-CATEGORY_GAME = 'game'
+CATEGORY_DEVELOPMENT = 'development'
+CATEGORY_TERMINAL = 'terminal'
+CATEGORY_COMMUNICATION = 'communication'
+CATEGORY_DOCUMENTATION = 'documentation'
+CATEGORY_OFFICE = 'office'
+CATEGORY_MEDIA = 'media'
+CATEGORY_SYSTEM = 'system'
+CATEGORY_AI_LLM = 'ai_llm'
+CATEGORY_DESIGN = 'design'
+CATEGORY_VIRTUALIZATION = 'virtualization'
 CATEGORY_OTHER = 'other'
 
 CATEGORY_NAMES = {
     CATEGORY_BROWSER: '浏览器',
-    CATEGORY_GAME: '游戏',
+    CATEGORY_DEVELOPMENT: '开发工具',
+    CATEGORY_TERMINAL: '终端',
+    CATEGORY_COMMUNICATION: '通讯工具',
+    CATEGORY_DOCUMENTATION: '文档',
+    CATEGORY_OFFICE: '办公',
+    CATEGORY_MEDIA: '影音媒体',
+    CATEGORY_SYSTEM: '系统',
+    CATEGORY_AI_LLM: 'AI/LLM',
+    CATEGORY_DESIGN: '设计',
+    CATEGORY_VIRTUALIZATION: '虚拟化',
     CATEGORY_OTHER: '其他',
 }
 
@@ -59,11 +109,84 @@ MIN_AUTO_SAVE_DURATION = 10  # 秒，自动保存最小增量（原 60s，过大
 
 
 def migrate_from_legacy():
-    """从旧版路径（%LOCALAPPDATA%/UsageTracker 和 %APPDATA%/UsageTracker）迁移数据到新路径"""
+    """从旧版路径迁移数据到 XDG/Linux-first 新路径。
+
+    Windows: 从 %LOCALAPPDATA%/UsageTracker 和 %APPDATA%/UsageTracker 迁移。
+    Linux:   从项目根目录下的 data/config/logs 迁移到 XDG 路径（如果存在且新路径为空）。
+    """
     import shutil
     import logging
     _log = logging.getLogger('constants')
 
+    if IS_LINUX and not getattr(sys, 'frozen', False):
+        # Linux: 从旧项目根路径迁移到 XDG 路径
+        old_data = _BASE_DIR / 'data'
+        old_config = _BASE_DIR / 'config'
+        old_logs = _BASE_DIR / 'logs'
+        migrated = False
+
+        # 迁移数据库
+        old_db = old_data / 'usage_data.db'
+        if old_data.exists() and old_db.exists() and not DB_PATH.exists():
+            DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(old_db, DB_PATH)
+                _log.info('数据库已迁移: %s -> %s', old_db, DB_PATH)
+                migrated = True
+            except Exception as e:
+                _log.warning('数据库迁移失败: %s', e)
+
+        # 迁移配置
+        old_cfg = old_config / 'config.json'
+        if old_config.exists() and old_cfg.exists() and not CONFIG_PATH.exists():
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(old_cfg, CONFIG_PATH)
+                _log.info('配置已迁移: %s -> %s', old_cfg, CONFIG_PATH)
+                migrated = True
+            except Exception as e:
+                _log.warning('配置迁移失败: %s', e)
+
+        # 迁移日志
+        if old_logs.exists():
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            for f in old_logs.glob('*.log*'):
+                dst = LOG_DIR / f.name
+                if not dst.exists():
+                    try:
+                        shutil.copy2(f, dst)
+                        migrated = True
+                    except Exception:
+                        pass
+
+        # 迁移报告
+        old_reports = old_data / 'reports'
+        if old_reports.exists():
+            REPORT_DIR.mkdir(parents=True, exist_ok=True)
+            for f in old_reports.glob('*.html'):
+                dst = REPORT_DIR / f.name
+                if not dst.exists():
+                    try:
+                        shutil.copy2(f, dst)
+                        migrated = True
+                    except Exception:
+                        pass
+
+        # 迁移分类器缓存
+        old_sc = old_data / 'classifier_cache.json'
+        if old_sc.exists() and not CLASSIFIER_CACHE_PATH.exists():
+            CLASSIFIER_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(old_sc, CLASSIFIER_CACHE_PATH)
+                migrated = True
+            except Exception:
+                pass
+
+        if migrated:
+            _log.info('Linux 数据迁移完成（旧路径: %s）', _BASE_DIR)
+        return
+
+    # ---- Windows 原有迁移逻辑 ----
     old_data_dir = Path(os.environ.get('LOCALAPPDATA', '')) / APP_NAME
     old_config_dir = Path(os.environ.get('APPDATA', '')) / APP_NAME
 
@@ -109,7 +232,7 @@ def migrate_from_legacy():
 
     # 迁移其他小文件
     for old_name, new_path in [
-        ('steam_games.json', STEAM_CACHE_PATH),
+        ('classifier_cache.json', CLASSIFIER_CACHE_PATH),
     ]:
         old_f = old_data_dir / old_name
         if old_f.exists() and not new_path.exists():

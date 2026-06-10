@@ -77,9 +77,9 @@ def _get_legend_text_color(theme_name: str) -> str:
 
 def _get_cat_colors(theme_name: str) -> dict[str, str]:
     colors = {
-        'minimal': {'browser': '#42a5f5', 'game': '#ef5350', 'other': '#78909c'},
-        'fairy_tale': {'browser': '#5b8ec9', 'game': '#d45d5d', 'other': '#9e8070'},
-        'business': {'browser': '#4361ee', 'game': '#e94560', 'other': '#8892a4'},
+        'minimal': {'browser': '#42a5f5', 'development': '#ef5350', 'other': '#78909c'},
+        'fairy_tale': {'browser': '#5b8ec9', 'development': '#d45d5d', 'other': '#9e8070'},
+        'business': {'browser': '#4361ee', 'development': '#e94560', 'other': '#8892a4'},
     }
     return colors.get(theme_name, colors['fairy_tale'])
 
@@ -176,7 +176,7 @@ class HTMLReportGenerator:
             return f'{s/total*100:.1f}%' if total else '0%'
 
         cat_names = {'browser': t('report.category_browser'),
-                     'game': t('report.category_game'),
+                     'development': t('report.category_development'),
                      'other': t('report.category_other')}
         cat_html = ''
         for cat, secs in report.category_breakdown.items():
@@ -198,37 +198,37 @@ class HTMLReportGenerator:
             ignore_btn = f'<button class="ignore-btn" onclick="ignoreApp(\'{safe_app}\',\'{safe_exe}\',this)" title="{t("report.ignore_btn")}">&#10005;</button>'
             app_rows += f"""<tr><td>{app}</td><td class="time-num">{_fmt_h_full(secs)}</td><td><div class="prog-wrap"><div class="prog-fill" style="width:{pct(secs,report.total_usage_seconds)};background:{cat_colors.get(cat_key, '#9e8070')}"></div></div></td><td class="time-num">{pct(secs, report.total_usage_seconds)}</td><td class="ignore-td">{ignore_btn}</td></tr>"""
 
-        game_detail = []
+        development_detail = []
         if self._data_store:
-            game_detail = self._data_store.get_daily_game_detail(report.date)
-        game_items_html = ''
-        game_chart_labels = '[]'
-        game_chart_datasets = '[]'
-        game_apps = sorted([g for g in game_detail if g['game'] > 0], key=lambda x: x['game'], reverse=True)
+            development_detail = self._data_store.get_daily_development_detail(report.date)
+        development_items_html = ''
+        development_chart_labels = '[]'
+        development_chart_datasets = '[]'
+        development_apps = sorted([g for g in development_detail if g['development'] > 0], key=lambda x: x['development'], reverse=True)
 
-        if game_apps:
-            _g_labels = [g['app_name'] for g in game_apps]
-            _g_hours = [round(g['game'] / 3600, 2) for g in game_apps]
-            _g_colors = [game_palette[i % len(game_palette)] for i in range(len(game_apps))]
-            game_chart_labels = json.dumps(_g_labels, ensure_ascii=False)
-            game_chart_datasets = json.dumps([{
-                'label': t('report.game_duration'), 'data': _g_hours,
+        if development_apps:
+            _g_labels = [g['app_name'] for g in development_apps]
+            _g_hours = [round(g['development'] / 3600, 2) for g in development_apps]
+            _g_colors = [game_palette[i % len(game_palette)] for i in range(len(development_apps))]
+            development_chart_labels = json.dumps(_g_labels, ensure_ascii=False)
+            development_chart_datasets = json.dumps([{
+                'label': t('report.development_duration'), 'data': _g_hours,
                 'backgroundColor': _g_colors, 'borderRadius': 6,
             }], ensure_ascii=False)
-            for i, g in enumerate(game_apps):
+            for i, g in enumerate(development_apps):
                 color = game_palette[i % len(game_palette)]
-                game_items_html += f"""<div class="game-item"><div class="game-icon" style="background:{color}22; color:{color}">✦</div><span class="game-name">{g['app_name']}</span><span class="game-time">{_fmt_h_full(g['game'])}</span></div>"""
+                development_items_html += f"""<div class="development-item"><div class="development-icon" style="background:{color}22; color:{color}">✦</div><span class="development-name">{g['app_name']}</span><span class="development-time">{_fmt_h_full(g['development'])}</span></div>"""
 
         bh = round(report.browser_seconds / 3600, 2)
-        gh = round(report.game_seconds / 3600, 2)
+        gh = round(report.development_seconds / 3600, 2)
         oh = round(report.other_seconds / 3600, 2)
         lbl_browser = t('report.browser')
-        lbl_game = t('report.game')
+        lbl_development = t('report.development')
         lbl_other = t('report.category_other')
-        cat_bar_labels = json.dumps([lbl_browser, lbl_game, lbl_other], ensure_ascii=False)
+        cat_bar_labels = json.dumps([lbl_browser, lbl_development, lbl_other], ensure_ascii=False)
         cat_bar_datasets = json.dumps([
             {'label': lbl_browser, 'data': [bh, 0, 0], 'backgroundColor': cat_colors['browser'] + 'd1', 'borderRadius': 5},
-            {'label': lbl_game, 'data': [0, gh, 0], 'backgroundColor': cat_colors['game'] + 'd1', 'borderRadius': 5},
+            {'label': lbl_development, 'data': [0, gh, 0], 'backgroundColor': cat_colors['development'] + 'd1', 'borderRadius': 5},
             {'label': lbl_other, 'data': [0, 0, oh], 'backgroundColor': cat_colors['other'] + 'bf', 'borderRadius': 5},
         ], ensure_ascii=False)
         legend_opts = _make_legend_opts(chart_font, hidden=True)
@@ -241,7 +241,7 @@ class HTMLReportGenerator:
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>{t('report.page_title', date=report.date)}</title>
 {chartjs_tag}
-<style>{css}</style><style>.chart-wrap {{ height:240px; }} .game-chart-wrap {{ height:200px; }}
+<style>{css}</style><style>.chart-wrap {{ height:240px; }} .development-chart-wrap {{ height:200px; }}
 .ignore-btn {{ border:none; background:#e8d4d4; color:#c05050; border-radius:50%; width:22px; height:22px; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; justify-content:center; transition:background .2s; }}
 .ignore-btn:hover {{ background:#d45d5d; color:#fff; }}</style>
 </head><body><div class="container">
@@ -249,12 +249,12 @@ class HTMLReportGenerator:
 <div class="summary">
 <div class="card total"><div class="lbl">{t('report.total')}</div><div class="val">{_fmt_h_full(report.total_usage_seconds)}</div></div>
 <div class="card browser"><div class="lbl">{lbl_browser}</div><div class="val">{_fmt_h_full(report.browser_seconds)}</div></div>
-<div class="card game"><div class="lbl">{lbl_game}</div><div class="val">{_fmt_h_full(report.game_seconds)}</div></div>
+<div class="card development"><div class="lbl">{lbl_development}</div><div class="val">{_fmt_h_full(report.development_seconds)}</div></div>
 <div class="card alert"><div class="lbl">{t('report.alerts')}</div><div class="val">{t('report.alerts_times', count=report.alerts_triggered)}</div></div>
 </div>
 <div class="section"><h2>{t('report.category_distribution')}</h2><div class="chart-wrap"><canvas id="catChart"></canvas></div></div>
 <div class="section"><h2>{t('report.category_detail')}</h2><div class="cat-list">{cat_html}</div></div>
-{('<div class="section"><h2>' + t('report.game_breakdown') + '</h2><div class="game-chart-wrap"><canvas id="gameChart"></canvas></div><div class="game-list" style="margin-top:12px">' + game_items_html + '</div></div>') if game_apps else ''}
+{('<div class="section"><h2>' + t('report.development_breakdown') + '</h2><div class="development-chart-wrap"><canvas id="developmentChart"></canvas></div><div class="development-list" style="margin-top:12px">' + development_items_html + '</div></div>') if development_apps else ''}
 <div class="section"><h2>{t('report.app_detail')}</h2><table><thead><tr><th>{t('report.app_col')}</th><th>{t('report.duration_col')}</th><th>{t('report.proportion_col')}</th><th>{t('report.percent_col')}</th><th>{t('report.action_col')}</th></tr></thead><tbody>{app_rows}</tbody></table></div>
 <div class="footer">{t('report.generated_by')} · <a href="#" onclick="exportPdf();return false" style="color:inherit;text-decoration:underline;cursor:pointer">{t('report.export_pdf')}</a></div>
 </div><script>
@@ -276,16 +276,7 @@ new Chart(document.getElementById('catChart'), {{
         }}
     }}
 }});
-{f"""new Chart(document.getElementById('gameChart'), {{
-    type:'bar', data:{{ labels:{game_chart_labels}, datasets:{game_chart_datasets} }},
-    options:{{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{{ legend:{legend_opts}, tooltip:{{ callbacks:{{ label: ctx => ' '+ctx.raw+'h' }} }} }},
-        scales:{{ x:{{ beginAtZero:true, title:{{ display:true, text:'{duration_h}', font:{{ family:{js_chart_font}, size:12 }} }},
-            ticks:{{ font:{{ family:{js_chart_font} }}, callback: v => v+'h' }} }},
-            y:{{ ticks:{{ font:{{ family:{js_chart_font}, size:12 }} }} }}
-        }}
-    }}
-}});""" if game_apps else ''}
+{development_chart_js}
 function ignoreApp(app,exe,btn){{
   btn.disabled=true; btn.textContent='…'; btn.style.opacity='.5';
   fetch('http://127.0.0.1:19234/ignore',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{app_name:app,exe_path:exe}})}})
@@ -312,26 +303,26 @@ function ignoreApp(app,exe,btn){{
         day_data = self._data_store.get_week_category_data(week_start, week_end)
         wd_names = _get_weekday_names()
         labels = [f'{wd_names[i]}\n{d["date"][-5:].replace("-","/")}' for i, d in enumerate(day_data)]
-        game_h = [round(d['game'] / 3600, 2) for d in day_data]
+        development_h = [round(d['development'] / 3600, 2) for d in day_data]
         browser_h = [round(d['browser'] / 3600, 2) for d in day_data]
         other_h = [round(d['other'] / 3600, 2) for d in day_data]
-        total_game = sum(d['game'] for d in day_data)
+        total_development = sum(d['development'] for d in day_data)
         total_browser = sum(d['browser'] for d in day_data)
         total_other = sum(d['other'] for d in day_data)
-        total_all = total_game + total_browser + total_other
+        total_all = total_development + total_browser + total_other
 
         lbl_browser = t('report.browser')
-        lbl_game = t('report.game')
+        lbl_development = t('report.development')
         lbl_other = t('report.category_other')
 
         day_rows = ''
         for i, d in enumerate(day_data):
-            total = d['game'] + d['browser'] + d['other']
-            day_rows += f"""<tr><td>{wd_names[i]}</td><td>{d['date']}</td><td style="color:{cat_colors['game']}">{_fmt_h(d['game'])}</td><td style="color:{cat_colors['browser']}">{_fmt_h(d['browser'])}</td><td style="color:{cat_colors['other']}">{_fmt_h(d['other'])}</td><td><strong>{_fmt_h(total)}</strong></td></tr>"""
+            total = d['development'] + d['browser'] + d['other']
+            day_rows += f"""<tr><td>{wd_names[i]}</td><td>{d['date']}</td><td style="color:{cat_colors['development']}">{_fmt_h(d['development'])}</td><td style="color:{cat_colors['browser']}">{_fmt_h(d['browser'])}</td><td style="color:{cat_colors['other']}">{_fmt_h(d['other'])}</td><td><strong>{_fmt_h(total)}</strong></td></tr>"""
 
         js_labels = json.dumps(labels, ensure_ascii=False)
         js_datasets = json.dumps([
-            {'label': lbl_game, 'data': game_h, 'backgroundColor': cat_colors['game'] + 'd1'},
+            {'label': lbl_development, 'data': development_h, 'backgroundColor': cat_colors['development'] + 'd1'},
             {'label': lbl_browser, 'data': browser_h, 'backgroundColor': cat_colors['browser'] + 'd1'},
             {'label': lbl_other, 'data': other_h, 'backgroundColor': cat_colors['other'] + 'c2'},
         ], ensure_ascii=False)
@@ -346,12 +337,12 @@ function ignoreApp(app,exe,btn){{
 <div class="header"><h1>{t('report.weekly_title', icon=header_icon)}</h1><div class="subtitle">{week_start} ～ {week_end}</div></div>
 <div class="summary">
 <div class="card total"><div class="lbl">{t('report.week_total')}</div><div class="val">{_fmt_h(total_all)}</div></div>
-<div class="card game"><div class="lbl">{lbl_game}</div><div class="val">{_fmt_h(total_game)}</div></div>
+<div class="card development"><div class="lbl">{lbl_development}</div><div class="val">{_fmt_h(total_development)}</div></div>
 <div class="card browser"><div class="lbl">{lbl_browser}</div><div class="val">{_fmt_h(total_browser)}</div></div>
 <div class="card other"><div class="lbl">{lbl_other}</div><div class="val">{_fmt_h(total_other)}</div></div>
 </div>
 <div class="section"><h2>{t('report.daily_distribution')}</h2><div class="chart-wrap"><canvas id="weekChart"></canvas></div></div>
-<div class="section"><h2>{t('report.daily_detail')}</h2><table><thead><tr><th>{t('report.weekday_col')}</th><th>{t('report.date_col')}</th><th>{lbl_game}</th><th>{lbl_browser}</th><th>{lbl_other}</th><th>{t('report.total_col')}</th></tr></thead><tbody>{day_rows}</tbody></table></div>
+<div class="section"><h2>{t('report.daily_detail')}</h2><table><thead><tr><th>{t('report.weekday_col')}</th><th>{t('report.date_col')}</th><th>{lbl_development}</th><th>{lbl_browser}</th><th>{lbl_other}</th><th>{t('report.total_col')}</th></tr></thead><tbody>{day_rows}</tbody></table></div>
 <div class="footer">{t('report.generated_by')}</div>
 </div><script>
 new Chart(document.getElementById('weekChart'), {{
@@ -392,16 +383,16 @@ new Chart(document.getElementById('weekChart'), {{
         wd_names = _get_weekday_names()
 
         lbl_browser = t('report.browser')
-        lbl_game = t('report.game')
+        lbl_development = t('report.development')
         lbl_other = t('report.category_other')
         duration_h = t('report.duration_h')
 
-        wd_game_h = [round(sum(x['game'] for x in wd_bars[wd]) / 3600, 2) for wd in range(7)]
+        wd_development_h = [round(sum(x['development'] for x in wd_bars[wd]) / 3600, 2) for wd in range(7)]
         wd_browser_h = [round(sum(x['browser'] for x in wd_bars[wd]) / 3600, 2) for wd in range(7)]
         wd_other_h = [round(sum(x['other'] for x in wd_bars[wd]) / 3600, 2) for wd in range(7)]
         wchart_labels = json.dumps(wd_names, ensure_ascii=False)
         js_wd_datasets = json.dumps([
-            {'label': lbl_game, 'data': wd_game_h, 'backgroundColor': cat_colors['game'] + 'cc'},
+            {'label': lbl_development, 'data': wd_development_h, 'backgroundColor': cat_colors['development'] + 'cc'},
             {'label': lbl_browser, 'data': wd_browser_h, 'backgroundColor': cat_colors['browser'] + 'cc'},
             {'label': lbl_other, 'data': wd_other_h, 'backgroundColor': cat_colors['other'] + 'b3'},
         ], ensure_ascii=False)
@@ -413,7 +404,7 @@ new Chart(document.getElementById('weekChart'), {{
             if not items:
                 continue
             wd_occ_datasets.append(json.dumps([
-                {'label': lbl_game, 'data': [round(it['game']/3600, 2) for it in items], 'backgroundColor': cat_colors['game'] + 'cc'},
+                {'label': lbl_development, 'data': [round(it['development']/3600, 2) for it in items], 'backgroundColor': cat_colors['development'] + 'cc'},
                 {'label': lbl_browser, 'data': [round(it['browser']/3600, 2) for it in items], 'backgroundColor': cat_colors['browser'] + 'cc'},
                 {'label': lbl_other, 'data': [round(it['other']/3600, 2) for it in items], 'backgroundColor': cat_colors['other'] + 'b3'},
             ], ensure_ascii=False))
@@ -421,33 +412,33 @@ new Chart(document.getElementById('weekChart'), {{
 
         week_labels = json.dumps([w['label'] for w in week_bars], ensure_ascii=False)
         week_datasets = json.dumps([
-            {'label': lbl_game, 'data': [round(w['game']/3600, 2) for w in week_bars], 'backgroundColor': cat_colors['game'] + 'cc'},
+            {'label': lbl_development, 'data': [round(w['development']/3600, 2) for w in week_bars], 'backgroundColor': cat_colors['development'] + 'cc'},
             {'label': lbl_browser, 'data': [round(w['browser']/3600, 2) for w in week_bars], 'backgroundColor': cat_colors['browser'] + 'cc'},
             {'label': lbl_other, 'data': [round(w['other']/3600, 2) for w in week_bars], 'backgroundColor': cat_colors['other'] + 'b3'},
         ], ensure_ascii=False)
 
-        total_game_m = sum(w['game'] for w in week_bars)
+        total_development_m = sum(w['development'] for w in week_bars)
         total_browser_m = sum(w['browser'] for w in week_bars)
         total_other_m = sum(w['other'] for w in week_bars)
-        total_all_m = total_game_m + total_browser_m + total_other_m
+        total_all_m = total_development_m + total_browser_m + total_other_m
 
-        wd_colors_arr = [cat_colors['game'], cat_colors['browser'], '#5bb9a0', cat_colors['game'], cat_colors['other'], '#e8a0b4', '#9b7fbf']
+        wd_colors_arr = [cat_colors['development'], cat_colors['browser'], '#5bb9a0', cat_colors['development'], cat_colors['other'], '#e8a0b4', '#9b7fbf']
         # 星期缩写（用于月报卡片）
         wd_short = wd_names if not wd_names[0].startswith('周') else [n[-1] for n in wd_names]
         wd_cards = ''
         for wd in range(7):
-            g = sum(x['game'] for x in wd_bars[wd])
+            g = sum(x['development'] for x in wd_bars[wd])
             b = sum(x['browser'] for x in wd_bars[wd])
             o = sum(x['other'] for x in wd_bars[wd])
             total = g + b + o
             if total <= 0:
                 continue
-            wd_cards += f"""<div class="wd-card" style="border-left-color:{wd_colors_arr[wd]}"><div class="wd-name">{wd_names[wd]}</div><div class="wd-total">{_fmt_h(total)}</div><div class="wd-sub"><span style="color:{cat_colors['game']}">{_fmt_h(g)}</span> · <span style="color:{cat_colors['browser']}">{_fmt_h(b)}</span> · <span style="color:{cat_colors['other']}">{_fmt_h(o)}</span></div></div>"""
+            wd_cards += f"""<div class="wd-card" style="border-left-color:{wd_colors_arr[wd]}"><div class="wd-name">{wd_names[wd]}</div><div class="wd-total">{_fmt_h(total)}</div><div class="wd-sub"><span style="color:{cat_colors['development']}">{_fmt_h(g)}</span> · <span style="color:{cat_colors['browser']}">{_fmt_h(b)}</span> · <span style="color:{cat_colors['other']}">{_fmt_h(o)}</span></div></div>"""
 
         week_table_rows = ''
         for w in week_bars:
-            total = w['game'] + w['browser'] + w['other']
-            week_table_rows += f"""<tr><td>{w['label']}</td><td style="color:{cat_colors['game']}">{_fmt_h(w['game'])}</td><td style="color:{cat_colors['browser']}">{_fmt_h(w['browser'])}</td><td style="color:{cat_colors['other']}">{_fmt_h(w['other'])}</td><td><strong>{_fmt_h(total)}</strong></td></tr>"""
+            total = w['development'] + w['browser'] + w['other']
+            week_table_rows += f"""<tr><td>{w['label']}</td><td style="color:{cat_colors['development']}">{_fmt_h(w['development'])}</td><td style="color:{cat_colors['browser']}">{_fmt_h(w['browser'])}</td><td style="color:{cat_colors['other']}">{_fmt_h(w['other'])}</td><td><strong>{_fmt_h(total)}</strong></td></tr>"""
 
         wd_occ_subcharts = ''
         for idx in range(len(wd_occ_datasets)):
@@ -466,8 +457,8 @@ new Chart(document.getElementById('weekChart'), {{
 
         week_mini_html = ''.join(
             f'<div class="week-mini"><div class="week-mini-label">{w["label"]}</div>'
-            f'<div class="week-mini-total">{_fmt_h(w["game"]+w["browser"]+w["other"])}</div>'
-            f'<div class="week-mini-sub"><span style="color:{cat_colors["game"]}">{_fmt_h(w["game"])}</span> · '
+            f'<div class="week-mini-total">{_fmt_h(w["development"]+w["browser"]+w["other"])}</div>'
+            f'<div class="week-mini-sub"><span style="color:{cat_colors["development"]}">{_fmt_h(w["development"])}</span> · '
             f'<span style="color:{cat_colors["browser"]}">{_fmt_h(w["browser"])}</span> · '
             f'<span style="color:{cat_colors["other"]}">{_fmt_h(w["other"])}</span></div></div>'
             for w in week_bars)
@@ -493,14 +484,14 @@ new Chart(document.getElementById('weekChart'), {{
 <div class="header"><h1>{t('report.monthly_title', icon=header_icon, month_str=month_str)}</h1><div class="subtitle">{t('report.monthly_subtitle')}</div></div>
 <div class="summary">
 <div class="card total"><div class="lbl">{t('report.month_total')}</div><div class="val">{_fmt_h(total_all_m)}</div></div>
-<div class="card game"><div class="lbl">{lbl_game}</div><div class="val">{_fmt_h(total_game_m)}</div></div>
+<div class="card development"><div class="lbl">{lbl_development}</div><div class="val">{_fmt_h(total_development_m)}</div></div>
 <div class="card browser"><div class="lbl">{lbl_browser}</div><div class="val">{_fmt_h(total_browser_m)}</div></div>
 <div class="card other"><div class="lbl">{lbl_other}</div><div class="val">{_fmt_h(total_other_m)}</div></div>
 </div>
 <div class="section"><h2>{t('report.by_weekday')}</h2><div class="wd-grid">{wd_cards}</div><div class="chart-wrap"><canvas id="weekdaySummaryChart"></canvas></div></div>
 <div class="section"><h2>{t('report.weekday_occurrences')}</h2><div class="wd-occ-grid">{wd_occ_subcharts}</div></div>
 <div class="section"><h2>{t('report.week_comparison')}</h2><div class="week-grid">{week_mini_html}</div><div class="chart-wrap" style="margin-top:14px"><canvas id="weekChart"></canvas></div>
-<table><thead><tr><th>{t('report.week_col')}</th><th>{lbl_game}</th><th>{lbl_browser}</th><th>{lbl_other}</th><th>{t('report.total_col')}</th></tr></thead><tbody>{week_table_rows}</tbody></table></div>
+<table><thead><tr><th>{t('report.week_col')}</th><th>{lbl_development}</th><th>{lbl_browser}</th><th>{lbl_other}</th><th>{t('report.total_col')}</th></tr></thead><tbody>{week_table_rows}</tbody></table></div>
 <div class="footer">{t('report.generated_by')}</div>
 </div><script>
 new Chart(document.getElementById('weekdaySummaryChart'), {{

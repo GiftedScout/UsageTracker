@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# ============================================================
+# UsageTracker Linux CLI Entry
+# ============================================================
+# Delegates to the project's Python CLI module.
+# Usage: ./bin/usagetracker <command> [options]
+# ============================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Find python3 (prefer active venv, then project-local venv, then system)
+PYTHON=""
+if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python3" ]; then
+    PYTHON="$VIRTUAL_ENV/bin/python3"
+else
+    for candidate in \
+        "$PROJECT_DIR/.venv/bin/python3" \
+        "$PROJECT_DIR/venv/bin/python3" \
+        "python3" \
+        "/usr/bin/python3"; do
+        if command -v "$candidate" &>/dev/null 2>&1; then
+            PYTHON="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PYTHON" ]; then
+    echo "[UsageTracker] ERROR: python3 not found. Install Python 3.8+" >&2
+    exit 1
+fi
+
+usage() {
+    cat <<EOF
+UsageTracker — Linux-first Desktop Usage Time Tracker
+
+Usage: $0 <command> [options]
+
+Commands:
+  daemon          Start headless daemon (default: no tray)
+  daemon --tray   Start with system tray (requires pystray + Pillow)
+  web             Open WebUI settings in browser
+  today           Show today's usage summary (stdout)
+  status          Check daemon status
+  stop            Gracefully stop the daemon
+  help            Show this help message
+
+Environment:
+  USAGETRACKER_PORT   WebUI port (default: 19234)
+  USAGETRACKER_DEBUG  Enable debug logging (set to 1)
+
+Examples:
+  $0 daemon                Start headless daemon
+  $0 daemon --tray         Start with system tray
+  $0 status                Check if daemon is running
+  $0 web                   Open WebUI in browser
+  $0 today                 Show today's usage summary
+  $0 stop                  Stop the daemon
+
+EOF
+}
+
+if [ $# -eq 0 ] || [ "$1" = "help" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    usage
+    exit 0
+fi
+
+COMMAND="$1"
+shift
+
+# Delegate to Python CLI module
+cd "$PROJECT_DIR"
+exec "$PYTHON" -m src.main "$COMMAND" "$@"

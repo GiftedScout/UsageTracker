@@ -12,11 +12,18 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .constants import (
-    CONFIG_PATH, DEFAULT_CHECK_INTERVAL, DEFAULT_DATA_RETENTION,
-    DEFAULT_THEME, DEFAULT_AUTO_START,
-)
-from .version import VERSION
+try:
+    from .constants import (
+        CONFIG_PATH, DEFAULT_CHECK_INTERVAL, DEFAULT_DATA_RETENTION,
+        DEFAULT_THEME, DEFAULT_AUTO_START,
+    )
+    from .version import VERSION
+except ImportError:  # Direct module import used by lightweight verification tools
+    from constants import (
+        CONFIG_PATH, DEFAULT_CHECK_INTERVAL, DEFAULT_DATA_RETENTION,
+        DEFAULT_THEME, DEFAULT_AUTO_START,
+    )
+    from version import VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -30,25 +37,25 @@ DEFAULT_CONFIG: dict[str, Any] = {
     'language': 'zh-CN',
     'privacy_accepted': False,
     'browsers': [],
-    'game_dirs': [],
+    'project_dirs': [],
     'ignored_apps': [
-        # 默认忽略 Windows 系统进程（避免计入使用时长）
-        {'exe_path': 'explorer.exe', 'app_name': 'Windows 资源管理器', 'ignored_at': ''},
-        {'exe_path': 'SearchHost.exe', 'app_name': 'Windows 搜索', 'ignored_at': ''},
-        {'exe_path': 'ShellExperienceHost.exe', 'app_name': 'Windows Shell', 'ignored_at': ''},
-        {'exe_path': 'TextInputHost.exe', 'app_name': 'Windows 输入法', 'ignored_at': ''},
-        {'exe_path': 'RuntimeBroker.exe', 'app_name': 'Runtime Broker', 'ignored_at': ''},
-        {'exe_path': 'StartMenuExperienceHost.exe', 'app_name': '开始菜单', 'ignored_at': ''},
-        {'exe_path': 'DesktopWindowManager.exe', 'app_name': 'DWM', 'ignored_at': ''},
-        {'exe_path': 'Taskmgr.exe', 'app_name': '任务管理器', 'ignored_at': ''},
-        {'exe_path': 'SettingSyncHost.exe', 'app_name': '设置同步', 'ignored_at': ''},
+        # 默认忽略 Linux 桌面 Shell/输入法/门户等后台进程（避免计入使用时长）
+        {'exe_path': 'gnome-shell', 'app_name': 'GNOME Shell', 'ignored_at': ''},
+        {'exe_path': 'kwin_wayland', 'app_name': 'KWin Wayland', 'ignored_at': ''},
+        {'exe_path': 'kwin_x11', 'app_name': 'KWin X11', 'ignored_at': ''},
+        {'exe_path': 'plasmashell', 'app_name': 'KDE Plasma Shell', 'ignored_at': ''},
+        {'exe_path': 'xdg-desktop-portal', 'app_name': 'XDG Desktop Portal', 'ignored_at': ''},
+        {'exe_path': 'ibus-daemon', 'app_name': 'IBus 输入法', 'ignored_at': ''},
+        {'exe_path': 'fcitx5', 'app_name': 'Fcitx5 输入法', 'ignored_at': ''},
+        {'exe_path': 'xwayland', 'app_name': 'XWayland', 'ignored_at': ''},
     ],
     'custom_categories': [
         {'id': 'browser', 'name': '浏览器', 'color': '#0078D4', 'apps': []},
-        {'id': 'game', 'name': '游戏', 'color': '#E74C3C', 'apps': []},
         {'id': 'development', 'name': '开发工具', 'color': '#2ECC71', 'apps': []},
+        {'id': 'terminal', 'name': '终端', 'color': '#1ABC9C', 'apps': []},
         {'id': 'communication', 'name': '通讯工具', 'color': '#9B59B6', 'apps': []},
-        {'id': 'entertainment', 'name': '影音娱乐', 'color': '#F39C12', 'apps': []},
+        {'id': 'document', 'name': '文档/笔记', 'color': '#3498DB', 'apps': []},
+        {'id': 'system', 'name': '系统', 'color': '#95A5A6', 'apps': []},
     ],
     'ui_mode': 'rich',  # 'simple' or 'rich'
     'first_run': True,  # Installation first run flag
@@ -59,6 +66,20 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 # 列表类型字段：升级时合并默认值（不丢失新增的默认项）
 _LIST_MERGE_KEYS = {'custom_categories', 'ignored_apps'}
+
+# Linux-first 迁移：早期默认忽略名单里带入的 Windows 后台进程。
+# 这些不是用户主动添加的 Linux 程序，加载旧配置时应自动清理。
+_LEGACY_WINDOWS_DEFAULT_IGNORED_APPS = {
+    'explorer.exe',
+    'searchhost.exe',
+    'shellexperiencehost.exe',
+    'textinputhost.exe',
+    'runtimebroker.exe',
+    'startmenuexperiencehost.exe',
+    'desktopwindowmanager.exe',
+    'taskmgr.exe',
+    'settingsynchost.exe',
+}
 
 # 合法取值
 _VALID_THEMES = {'minimal', 'fairy_tale', 'business'}
@@ -81,6 +102,9 @@ class ConfigManager:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     saved = json.load(f)
                 self._config = self._validate(saved)
+                if self._config != saved:
+                    self.save()
+                    logger.info('配置已迁移并保存: %s', self.config_path)
                 logger.info('配置已加载: %s', self.config_path)
             except Exception as e:
                 logger.warning('配置加载失败，使用默认值: %s', e)
@@ -92,6 +116,9 @@ class ConfigManager:
     def _validate(self, raw: dict[str, Any]) -> dict[str, Any]:
         """校验并修正配置值（列表类型自动合并默认值）"""
         cfg = dict(DEFAULT_CONFIG)
+        if 'project_dirs' not in raw and 'game_dirs' in raw:
+            raw = dict(raw)
+            raw['project_dirs'] = raw.get('game_dirs', [])
         for key, default in DEFAULT_CONFIG.items():
             if key in raw:
                 val = raw[key]
@@ -112,8 +139,15 @@ class ConfigManager:
                             if item.get('id', '') not in existing_ids:
                                 val.append(dict(item))
                     elif key == 'ignored_apps':
+                        # 清理 Linux 迁移前遗留的 Windows 默认忽略项，并过滤坏数据。
+                        val = [
+                            a for a in val
+                            if isinstance(a, dict)
+                            and str(a.get('exe_path', '')).strip().lower()
+                            not in _LEGACY_WINDOWS_DEFAULT_IGNORED_APPS
+                        ]
                         existing_paths = {
-                            a.get('exe_path', '').lower() for a in val}
+                            str(a.get('exe_path', '')).strip().lower() for a in val}
                         for item in default:
                             if item.get('exe_path', '').lower() not in existing_paths:
                                 val.append(dict(item))
@@ -209,8 +243,36 @@ class ConfigManager:
         return self._config.get('browsers', [])
 
     @property
-    def game_dirs(self) -> list[str]:
-        return self._config.get('game_dirs', [])
+    def project_dirs(self) -> list[str]:
+        return self._config.get('project_dirs', [])
+
+    @project_dirs.setter
+    def project_dirs(self, value: list[str]) -> None:
+        self._config['project_dirs'] = list(value or [])
+
+    def add_project_dir(self, path: str) -> bool:
+        """Add a project directory and persist it."""
+        path = str(path or '').strip()
+        if not path:
+            return False
+        dirs = list(self.project_dirs)
+        if path in dirs:
+            return False
+        dirs.append(path)
+        self.project_dirs = dirs
+        self.save()
+        return True
+
+    def remove_project_dir(self, path: str) -> bool:
+        """Remove a project directory and persist it."""
+        path = str(path or '').strip()
+        dirs = list(self.project_dirs)
+        new_dirs = [d for d in dirs if d != path]
+        if len(new_dirs) == len(dirs):
+            return False
+        self.project_dirs = new_dirs
+        self.save()
+        return True
 
     @property
     def ignored_apps(self) -> list[dict[str, str]]:

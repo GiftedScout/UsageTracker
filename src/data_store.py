@@ -34,7 +34,7 @@ class DailyReport:
     date: str
     total_usage_seconds: float
     browser_seconds: float
-    game_seconds: float
+    development_seconds: float
     other_seconds: float
     app_breakdown: dict[str, float]
     category_breakdown: dict[str, float]
@@ -192,7 +192,7 @@ class DataStore:
         records = self.get_daily_usage(query_date)
         if not records:
             return None
-        total = browser = game = other = 0.0
+        total = browser = development = other = 0.0
         app_breakdown: dict[str, float] = {}
         cat_breakdown: dict[str, float] = {}
         for r in records:
@@ -201,8 +201,8 @@ class DataStore:
             cat_breakdown[r.category] = cat_breakdown.get(r.category, 0.0) + r.duration_seconds
             if r.category == 'browser':
                 browser += r.duration_seconds
-            elif r.category == 'game':
-                game += r.duration_seconds
+            elif r.category == 'development':
+                development += r.duration_seconds
             else:
                 other += r.duration_seconds
         with self._get_conn() as conn:
@@ -211,7 +211,7 @@ class DataStore:
                 (query_date,)).fetchone()[0]
         return DailyReport(
             date=query_date, total_usage_seconds=total,
-            browser_seconds=browser, game_seconds=game, other_seconds=other,
+            browser_seconds=browser, development_seconds=development, other_seconds=other,
             app_breakdown=app_breakdown, category_breakdown=cat_breakdown,
             alerts_triggered=alerts)
 
@@ -226,7 +226,7 @@ class DataStore:
             current += timedelta(days=1)
         return reports
 
-    def get_daily_game_detail(self, query_date: str | None = None) -> list[dict]:
+    def get_daily_development_detail(self, query_date: str | None = None) -> list[dict]:
         if query_date is None:
             query_date = date.today().isoformat()
         with self._get_conn() as conn:
@@ -237,7 +237,7 @@ class DataStore:
         app_map: dict[str, dict] = {}
         for app, cat, secs in rows:
             if app not in app_map:
-                app_map[app] = {'app_name': app, 'game': 0.0, 'browser': 0.0, 'other': 0.0}
+                app_map[app] = {'app_name': app, 'development': 0.0, 'browser': 0.0, 'other': 0.0}
             if cat in app_map[app]:
                 app_map[app][cat] = float(secs or 0)
         return list(app_map.values())
@@ -252,7 +252,7 @@ class DataStore:
                 rows = conn.execute(
                     "SELECT category, SUM(duration_seconds) FROM usage_records "
                     "WHERE date = ? GROUP BY category", (d,)).fetchall()
-                day_data: dict[str, float] = {'date': d, 'game': 0.0, 'browser': 0.0, 'other': 0.0}
+                day_data: dict[str, float] = {'date': d, 'development': 0.0, 'browser': 0.0, 'other': 0.0}
                 for cat, secs in rows:
                     if cat in day_data:
                         day_data[cat] = float(secs or 0)
@@ -276,7 +276,7 @@ class DataStore:
                 (first_day.isoformat(), chart_end.isoformat())).fetchall()
         for d, cat, secs in rows:
             if d not in month_rows:
-                month_rows[d] = {'game': 0.0, 'browser': 0.0, 'other': 0.0}
+                month_rows[d] = {'development': 0.0, 'browser': 0.0, 'other': 0.0}
             if cat in month_rows[d]:
                 month_rows[d][cat] = float(secs or 0)
 
@@ -293,7 +293,7 @@ class DataStore:
                     (prev_first.isoformat(), prev_last.isoformat())).fetchall()
             for d, cat, secs in prev:
                 if d not in prev_rows:
-                    prev_rows[d] = {'game': 0.0, 'browser': 0.0, 'other': 0.0}
+                    prev_rows[d] = {'development': 0.0, 'browser': 0.0, 'other': 0.0}
                 if cat in prev_rows[d]:
                     prev_rows[d][cat] = float(secs or 0)
 
@@ -310,7 +310,7 @@ class DataStore:
             if dd_data is not None:
                 weekday_bars[wd].append({
                     'label': f'{cur.month}/{cur.day}', 'week_idx': wd_counter[wd],
-                    'game': dd_data['game'], 'browser': dd_data['browser'],
+                    'development': dd_data['development'], 'browser': dd_data['browser'],
                     'other': dd_data['other']})
             cur += timedelta(days=1)
 
@@ -325,10 +325,10 @@ class DataStore:
             if not has_data:
                 continue
             we_safe = min(we, chart_end)
-            total: dict[str, float] = {'game': 0.0, 'browser': 0.0, 'other': 0.0}
+            total: dict[str, float] = {'development': 0.0, 'browser': 0.0, 'other': 0.0}
             c2 = ws
             while c2 <= we_safe:
-                dd_data = day_map.get(c2.isoformat(), {'game': 0.0, 'browser': 0.0, 'other': 0.0})
+                dd_data = day_map.get(c2.isoformat(), {'development': 0.0, 'browser': 0.0, 'other': 0.0})
                 for k in total:
                     total[k] += dd_data[k]
                 c2 += timedelta(days=1)

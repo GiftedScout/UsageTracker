@@ -1,18 +1,20 @@
 """
 应用分类器（配置驱动）
-- 动态扫描 Steam 游戏库
-- 自动扫描米哈游游戏目录
-- 识别浏览器类应用
+- Linux-first 应用场景分类
+- 识别浏览器、开发、终端、通讯、文档、办公、设计、系统等应用
 - 支持自定义分类和忽略名单
 """
 
-import json
 import logging
-import os
-import re
-import winreg
+import sqlite3
+import subprocess
 from pathlib import Path
-from typing import Dict, Optional, Set
+
+try:
+    import winreg
+except ImportError:  # non-Windows
+    winreg = None
+from typing import Set
 
 logger = logging.getLogger(__name__)
 
@@ -48,31 +50,121 @@ HELPER_EXE_BLACKLIST = {
     'galaxyclient helper.exe', 'cefprocess.exe',
 }
 
-# ---- 已知游戏白名单（兜底） ----
-KNOWN_GAMES = {
-    'yuanshen.exe': '原神',
-    'genshinimpact.exe': '原神',
-    'starrail.exe': '崩坏：星穹铁道',
-    'zenlesszonezeero.exe': '绝区零',
-    'bh3.exe': '崩坏3',
-    'cyberpunk2077.exe': '赛博朋克 2077',
-    'witcher3.exe': '巫师3',
-    'mhyx.exe': '明日方舟',  # 官方客户端启动器，通过 launcher 识别
-    # wegame.exe 已移至 GAME_LAUNCHERS，此处不重复
-}
-
-# ---- 游戏平台启动器（自身不算游戏，不可修改） ----
-GAME_LAUNCHERS = {
-    'steam.exe', 'epicgameslauncher.exe', 'battle.net.exe',
-    'galaxyclient.exe', 'origin.exe', 'ea desktop.exe',
-    'ubisoft connect.exe', 'xboxpcapp.exe', 'wegame.exe',
-    'wallpaper64.exe', 'wallpaper32.exe',
-}
-
-# ---- 默认浏览器列表 ----
+# ---- 默认浏览器列表（跨平台） ----
 DEFAULT_BROWSERS = {
+    # Windows
     'msedge.exe', 'chrome.exe', 'firefox.exe',
     'brave.exe', 'opera.exe', 'vivaldi.exe', 'arc.exe',
+    # Linux
+    'firefox', 'firefox-esr', 'firefox-developer', 'icecat', 'librewolf',
+    'chromium', 'chromium-browser', 'chrome', 'google-chrome', 'google-chrome-stable',
+    'brave', 'brave-browser', 'brave-browser-stable',
+    'opera', 'opera-browser', 'vivaldi', 'vivaldi-bin',
+    'microsoft-edge', 'microsoft-edge-dev', 'microsoft-edge-stable', 'msedge',
+    'epiphany', 'epiphany-browser', 'gnome-web', 'org.gnome.epiphany',
+    'midori', 'falkon', 'konqueror', 'qutebrowser', 'nyxt', 'luakit',
+    'floorp', 'zen', 'thorium-browser', 'ungoogled-chromium',
+}
+
+# ---- Linux 开发工具进程名（不含 .exe） ----
+DEVELOPMENT_PROCESSES = {
+    'code', 'code-oss', 'code-insiders',                       # VSCode
+    'idea', 'idea-ultimate', 'idea-ce',                        # IntelliJ
+    'pycharm', 'pycharm-professional', 'pycharm-community',    # PyCharm
+    'webstorm', 'goland', 'datagrip', 'rider', 'phpstorm', 'clion',
+    'android-studio', 'studio',                                # Android Studio
+    'eclipse', 'netbeans', 'sublime_text', 'atom', 'brackets',
+    'geany', 'kate', 'kdevelop', 'anjuta',
+    'neovim', 'nvim', 'vim', 'gvim', 'emacs',
+    'gitkraken', 'gitg', 'lazygit',
+    'dbeaver', 'mysql-workbench', 'postgresql', 'pgadmin4',
+    'jupyter', 'jupyter-lab', 'jupyter-notebook',
+}
+
+# ---- Linux 终端模拟器 ----
+TERMINAL_PROCESSES = {
+    'gnome-terminal', 'konsole', 'alacritty', 'kitty', 'terminator',
+    'xterm', 'urxvt', 'rxvt', 'st',
+    'tilix', 'termite', 'lxterminal', 'xfce4-terminal',
+    'guake', 'yakuake', 'tilda',
+    'wezterm', 'foot', 'footclient', 'hyper',
+}
+
+# ---- Linux 通讯工具 ----
+COMMUNICATION_PROCESSES = {
+    'discord', 'slack', 'element', 'telegram-desktop', 'telegram',
+    'signal-desktop', 'whatsapp-nativefier', 'franz', 'rambox',
+    'thunderbird', 'geary', 'evolution',
+    'teams', 'teams-for-linux', 'zoom', 'skypeforlinux',
+    'mattermost-desktop',
+    'wechat', 'qq', 'dingtalk', 'feishu', 'lark',
+}
+
+# ---- Linux 文档/笔记工具 ----
+DOCUMENTATION_PROCESSES = {
+    'obsidian', 'logseq', 'notable', 'notion', 'notion-app', 'notion-enhanced',
+    'zettlr', 'typora', 'marktext', 'ghostwriter',
+    'xournal', 'xournalpp', 'okular', 'zathura', 'evince', 'atril',
+    'calibre', 'calibre-gui',
+}
+
+# ---- Linux 办公套件 ----
+OFFICE_PROCESSES = {
+    'libreoffice', 'libreoffice-writer', 'libreoffice-calc', 'libreoffice-impress',
+    'onlyoffice', 'onlyoffice-desktopeditors',
+    'wps', 'wps-office',
+    'abiword', 'gnumeric', 'calligrawords', 'calligrasheets',
+}
+
+# ---- Linux 影音媒体 ----
+MEDIA_PROCESSES = {
+    'vlc', 'mpv', 'totem', 'celluloid',
+    'gnome-music', 'rhythmbox', 'spotify', 'clementine',
+    'audacious', 'strawberry', 'deadbeef', 'cmus',
+    'gimp', 'inkscape', 'krita', 'blender', 'darktable', 'rawtherapee',
+    'shotwell', 'gthumb', 'eog', 'nomacs',
+    'kdenlive', 'openshot', 'shotcut', 'obs', 'obs-studio',
+    'simplescreenrecorder', 'peek', 'flameshot', 'shutter',
+    'handbrake', 'pavucontrol',
+}
+
+# ---- Linux 系统工具 ----
+SYSTEM_PROCESSES = {
+    'gnome-system-monitor', 'ksysguard', 'htop',
+    'gnome-control-center', 'gnome-settings', 'systemsettings',
+    'gnome-disks', 'gparted', 'baobab',
+    'gnome-calculator', 'gnome-calendar', 'gnome-clocks',
+    'nautilus', 'nemo', 'thunar', 'pcmanfm', 'dolphin', 'caja',
+    'gnome-characters', 'gnome-logs',
+    'timeshift', 'deja-dup',
+    'gufw', 'system-config-printer',
+}
+
+# ---- Linux AI/LLM 工具 ----
+AI_PROCESSES = {
+    'ollama', 'llama-server', 'llama-cli',
+    'lm-studio', 'jan', 'jan-electron',
+    'text-generation-webui', 'invoke-ai',
+}
+
+# ---- Linux 设计/3D ----
+DESIGN_PROCESSES = {
+    'gimp', 'inkscape', 'krita',
+    'blender', 'freecad', 'openscad',
+    'darktable', 'rawtherapee',
+    'figma-linux',
+    'scribus', 'pencil',
+}
+
+# ---- Linux 虚拟化 ----
+VIRTUALIZATION_PROCESSES = {
+    'virtualbox', 'virtualboxvm',
+    'qemu', 'qemu-system-x86_64', 'qemu-system-aarch64',
+    'virt-manager', 'gnome-boxes',
+    'vmware', 'vmware-vmx',
+    'docker', 'docker-compose', 'docker-desktop', 'podman',
+    'kubectl', 'minikube', 'kind', 'k3d', 'containerd',
+    'wine', 'wineserver', 'wine64', 'proton', 'lutris',
 }
 
 
@@ -83,298 +175,173 @@ class AppClassifier:
         """
         Args:
             config_manager: ConfigManager 实例，用于读取浏览器/忽略名单/自定义分类
-            cache_file: 游戏缓存文件路径
+            cache_file: 分类器缓存文件路径
         """
         self._config = config_manager
         self.cache_file = cache_file or self._get_default_cache_path()
-        self.steam_games: Dict[str, str] = {}  # exe -> 游戏名
-        self.extra_games: Dict[str, str] = {}
-        self._load_cached_games()
-        if not self.steam_games and not self.extra_games:
-            self.refresh_all_games()
+        self._load_cached_rules()
 
     @staticmethod
     def detect_installed_browsers() -> Set[str]:
-        """从注册表 App Paths 检测已安装的浏览器"""
-        found: Set[str] = set()
-        try:
-            base = r'SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths'
-            for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        """检测已安装的浏览器。Windows 走注册表，Linux 走 xdg-mime + desktop/可执行文件扫描。"""
+        browsers: Set[str] = set()
+        if winreg is None:
+            desktop_dirs = [
+                Path('/usr/share/applications'),
+                Path('/usr/local/share/applications'),
+                Path.home() / '.local/share/applications',
+                Path('/var/lib/flatpak/exports/share/applications'),
+                Path.home() / '.local/share/flatpak/exports/share/applications',
+            ]
+            needles = {
+                'firefox': 'firefox',
+                'librewolf': 'librewolf',
+                'icecat': 'icecat',
+                'floorp': 'floorp',
+                'zen': 'zen',
+                'chromium': 'chromium',
+                'chrome': 'google-chrome',
+                'google-chrome': 'google-chrome',
+                'brave': 'brave-browser',
+                'opera': 'opera',
+                'vivaldi': 'vivaldi',
+                'edge': 'microsoft-edge',
+                'microsoft-edge': 'microsoft-edge',
+                'epiphany': 'epiphany',
+                'gnome-web': 'gnome-web',
+                'falkon': 'falkon',
+                'qutebrowser': 'qutebrowser',
+                'midori': 'midori',
+            }
+
+            def _add_desktop_name(name: str) -> None:
+                stem = Path(name.strip()).name.replace('.desktop', '').lower()
+                if not stem:
+                    return
+                for needle, canonical in needles.items():
+                    if needle in stem:
+                        browsers.add(canonical)
+                        browsers.add(stem)
+
+            # xdg-mime only reads desktop defaults; no system mutation.
+            for scheme in ('x-scheme-handler/https', 'x-scheme-handler/http', 'text/html'):
                 try:
-                    with winreg.OpenKey(hive, base) as root:
-                        i = 0
-                        while True:
-                            try:
-                                key_name = winreg.EnumKey(root, i).lower()
-                                i += 1
-                                if key_name in DEFAULT_BROWSERS:
-                                    found.add(key_name)
-                            except OSError:
+                    result = subprocess.run(
+                        ['xdg-mime', 'query', 'default', scheme],
+                        capture_output=True, text=True, timeout=3
+                    )
+                    if result.returncode == 0:
+                        _add_desktop_name(result.stdout)
+                except Exception:
+                    continue
+
+            for directory in desktop_dirs:
+                try:
+                    for desktop in directory.glob('*.desktop'):
+                        low = desktop.name.lower()
+                        for needle, canonical in needles.items():
+                            if needle in low:
+                                browsers.add(canonical)
+                                browsers.add(desktop.stem.lower())
                                 break
-                except OSError:
-                    pass
+                except Exception:
+                    continue
+
+            # which lookup catches AppImage/portable names on PATH.
+            for candidate in DEFAULT_BROWSERS:
+                try:
+                    result = subprocess.run(
+                        ['which', candidate], capture_output=True, text=True, timeout=1
+                    )
+                    if result.returncode == 0:
+                        browsers.add(candidate)
+                except Exception:
+                    continue
+            return browsers
+
+        browser_names = {
+            'chrome': 'chrome.exe', 'firefox': 'firefox.exe', 'edge': 'msedge.exe',
+            'brave': 'brave.exe', 'opera': 'opera.exe', 'vivaldi': 'vivaldi.exe',
+        }
+        try:
+            for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+                try:
+                    with winreg.OpenKey(root, r'SOFTWARE\Clients\StartMenuInternet') as key:
+                        for i in range(winreg.QueryInfoKey(key)[0]):
+                            sub = winreg.EnumKey(key, i).lower()
+                            for needle, exe in browser_names.items():
+                                if needle in sub:
+                                    browsers.add(exe)
+                except FileNotFoundError:
+                    continue
         except Exception:
             pass
-        return found
+        return browsers
+
+    def _configured_browser_names(self) -> Set[str]:
+        """Return browser names from config, accepting both old list[str] and API list[dict]."""
+        custom: Set[str] = set()
+        if not self._config:
+            return custom
+        for item in getattr(self._config, 'browsers', []) or []:
+            values = []
+            if isinstance(item, str):
+                values.append(item)
+            elif isinstance(item, dict):
+                values.extend([
+                    item.get('name', ''),
+                    item.get('exe_path', ''),
+                    item.get('executable', ''),
+                ])
+            for value in values:
+                name = Path(str(value).strip()).name.lower()
+                if not name:
+                    continue
+                custom.add(name)
+                if name.endswith('.desktop'):
+                    custom.add(name[:-8])
+                if name.endswith('.exe'):
+                    custom.add(name[:-4])
+        return custom
 
     @property
     def browsers(self) -> Set[str]:
         """浏览器列表（配置合并默认）"""
-        custom = set()
-        if self._config:
-            for b in self._config.browsers:
-                custom.add(b.lower())
-        return DEFAULT_BROWSERS | custom
+        return DEFAULT_BROWSERS | self._configured_browser_names()
 
     @property
     def installed_browsers(self) -> Set[str]:
         """实际检测到的浏览器（已安装 + 正在运行 + 自定义）"""
         installed = self.detect_installed_browsers()
-        custom = set()
-        if self._config:
-            for b in self._config.browsers:
-                custom.add(b.lower())
-        return installed | custom
+        return installed | self._configured_browser_names()
 
     def _get_default_cache_path(self) -> str:
-        from .constants import STEAM_CACHE_PATH
-        STEAM_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        return str(STEAM_CACHE_PATH)
-
-    # ---- Steam 扫描 ----
-
-    def _get_steam_install_path(self) -> Optional[str]:
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                                r'Software\Valve\Steam') as key:
-                steam_path, _ = winreg.QueryValueEx(key, 'SteamPath')
-                return steam_path
-        except (OSError, FileNotFoundError):
-            pass
-        for path in [r'C:\Program Files (x86)\Steam', r'C:\Program Files\Steam',
-                     r'D:\Steam', r'D:\Games\Steam']:
-            if os.path.exists(os.path.join(path, 'steam.exe')):
-                return path
-        return None
-
-    def _get_steam_library_folders(self, steam_path: str) -> list[str]:
-        folders = [steam_path]
-        vdf_path = Path(steam_path) / 'steamapps' / 'libraryfolders.vdf'
-        if vdf_path.exists():
-            try:
-                content = vdf_path.read_text(encoding='utf-8')
-                for m in re.finditer(r'"path"\s*"([^"]+)"', content):
-                    lib = m.group(1).replace('\\\\', '\\')
-                    if lib not in folders:
-                        folders.append(lib)
-            except Exception:
-                pass
-        return folders
-
-    def _parse_acf(self, acf_path: Path):
-        try:
-            content = acf_path.read_text(encoding='utf-8')
-            name = re.search(r'"name"\s*"([^"]+)"', content)
-            installdir = re.search(r'"installdir"\s*"([^"]+)"', content)
-            if name and installdir:
-                return name.group(1), installdir.group(1)
-        except Exception:
-            pass
-        return None
-
-    def _pick_main_exe(self, game_dir: Path) -> Optional[str]:
-        def _best_exe(folder: Path) -> tuple[Optional[str], int]:
-            exe_files = [f for f in folder.glob('*.exe')
-                         if f.name.lower() not in HELPER_EXE_BLACKLIST]
-            if not exe_files:
-                return None, 0
-            try:
-                exe_files.sort(key=lambda f: f.stat().st_size, reverse=True)
-                return exe_files[0].name.lower(), exe_files[0].stat().st_size
-            except Exception:
-                return exe_files[0].name.lower(), 0
-
-        result, _ = _best_exe(game_dir)
-        if result:
-            return result
-
-        best_size = 0
-        best_name = None
-        try:
-            for sub in game_dir.rglob('*.exe'):
-                try:
-                    depth = len(sub.relative_to(game_dir).parts) - 1
-                except ValueError:
-                    continue
-                if depth > 3:
-                    continue
-                if sub.name.lower() in HELPER_EXE_BLACKLIST:
-                    continue
-                try:
-                    sz = sub.stat().st_size
-                    if sz > best_size:
-                        best_size = sz
-                        best_name = sub.name.lower()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        return best_name
-
-    def _refresh_steam_games(self) -> int:
-        steam_path = self._get_steam_install_path()
-        if not steam_path:
-            logger.info('未找到 Steam 安装路径')
-            return 0
-        new_games: Dict[str, str] = {}
-        for lib_path in self._get_steam_library_folders(steam_path):
-            steamapps = Path(lib_path) / 'steamapps'
-            if not steamapps.exists():
-                continue
-            for acf_file in steamapps.glob('appmanifest_*.acf'):
-                result = self._parse_acf(acf_file)
-                if not result:
-                    continue
-                game_name, install_dir = result
-                game_dir = steamapps / 'common' / install_dir
-                if not game_dir.exists():
-                    continue
-                exe_name = self._pick_main_exe(game_dir)
-                if exe_name:
-                    if exe_name in HELPER_EXE_BLACKLIST:
-                        continue
-                    if exe_name in {x.lower() for x in GAME_LAUNCHERS}:
-                        continue
-                    new_games[exe_name] = game_name
-                    logger.debug('Steam 游戏: %s -> %s', game_name, exe_name)
-        self.steam_games = new_games
-        logger.info('Steam 共识别 %d 个游戏主进程', len(new_games))
-        return len(new_games)
-
-    # ---- 米哈游 & 非 Steam ----
-
-    def _refresh_mihoyo_games(self) -> int:
-        found: Dict[str, str] = {}
-        try:
-            base = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as hive:
-                i = 0
-                while True:
-                    try:
-                        sub_name = winreg.EnumKey(hive, i)
-                        i += 1
-                        with winreg.OpenKey(hive, sub_name) as sub:
-                            try:
-                                disp, _ = winreg.QueryValueEx(sub, 'DisplayName')
-                                loc, _ = winreg.QueryValueEx(sub, 'InstallLocation')
-                                if any(x in disp for x in
-                                       ['原神', 'Genshin', '星穹铁道', 'Star Rail',
-                                        '绝区零', 'Zenless', '崩坏3']):
-                                    self._probe_mihoyo_dir(loc, disp, found)
-                            except (OSError, FileNotFoundError):
-                                pass
-                    except OSError:
-                        break
-        except Exception:
-            pass
-
-        search_roots = [d + '\\' for d in ['C:', 'D:', 'E:', 'F:'] if os.path.exists(d)]
-        candidate_dirs = [
-            'Genshin Impact', 'Genshin Impact bilibili',
-            'Star Rail', 'StarRail',
-            'ZenlessZoneZero', 'Zenless Zone Zero',
-            'HoYoPlay', 'miHoYo',
-        ]
-        for root in search_roots:
-            for d in candidate_dirs:
-                path = os.path.join(root, d)
-                if os.path.isdir(path):
-                    self._probe_mihoyo_dir(path, d, found)
-            for sub in ['app', 'Games', 'Game']:
-                sub_root = os.path.join(root, sub)
-                if os.path.isdir(sub_root):
-                    try:
-                        for d in os.listdir(sub_root):
-                            if any(x in d for x in
-                                   ['Genshin', 'Star Rail', 'StarRail',
-                                    'Zenless', 'bilibili', 'miHoYo']):
-                                self._probe_mihoyo_dir(os.path.join(sub_root, d), d, found)
-                    except PermissionError:
-                        pass
-
-        import psutil
-        for exe, name in KNOWN_GAMES.items():
-            if exe not in found:
-                try:
-                    for p in psutil.process_iter(['name']):
-                        if p.info['name'] and p.info['name'].lower() == exe:
-                            found[exe] = name
-                            break
-                except Exception:
-                    pass
-
-        self.extra_games = found
-        if found:
-            logger.info('非 Steam 游戏: %s', list(found.items()))
-        return len(found)
-
-    def _probe_mihoyo_dir(self, base_dir: str, label: str, found: dict) -> None:
-        target_exes = {
-            'yuanshen.exe': '原神', 'genshinimpact.exe': '原神',
-            'starrail.exe': '崩坏：星穹铁道', 'hkrpg.exe': '崩坏：星穹铁道',
-            'zenlesszonezeero.exe': '绝区零', 'bh3.exe': '崩坏3',
-        }
-        try:
-            for root, dirs, files in os.walk(base_dir):
-                depth = root.replace(base_dir, '').count(os.sep)
-                if depth > 4:
-                    dirs.clear()
-                    continue
-                for f in files:
-                    fl = f.lower()
-                    if fl in target_exes:
-                        found[fl] = target_exes[fl]
-                        logger.debug('发现游戏: %s -> %s', target_exes[fl], f)
-        except PermissionError:
-            pass
+        from .constants import CLASSIFIER_CACHE_PATH
+        CLASSIFIER_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        return str(CLASSIFIER_CACHE_PATH)
 
     # ---- 公共方法 ----
 
-    def refresh_all_games(self) -> None:
-        self._refresh_steam_games()
-        self._refresh_mihoyo_games()
-        self._save_cached_games()
+    def refresh_all_rules(self) -> None:
+        """刷新分类规则。
 
-    def _load_cached_games(self) -> None:
-        try:
-            if os.path.exists(self.cache_file):
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                # 兼容旧格式（list）和新格式（dict）
-                games = data.get('games', [])
-                if isinstance(games, list):
-                    self.steam_games = {e: e.replace('.exe', '') for e in games}
-                else:
-                    self.steam_games = games
-                self.extra_games = data.get('extra_games', {})
-                total = len(self.steam_games) + len(self.extra_games)
-                logger.info('从缓存加载了 %d 个游戏', total)
-        except Exception as e:
-            logger.warning('加载缓存失败: %s', e)
-            self.steam_games = {}
-            self.extra_games = {}
+        Linux-first 版本不再主动扫描平台专用目录；分类规则主要来自
+        内置 Linux 应用场景表和用户在 WebUI 中维护的自定义分类。
+        保留该方法是为了兼容旧调用方。
+        """
+        self._save_cached_rules()
 
-    def _save_cached_games(self) -> None:
-        try:
-            from .constants import STEAM_CACHE_PATH
-            STEAM_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    'games': dict(self.steam_games),
-                    'extra_games': self.extra_games,
-                }, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.warning('保存缓存失败: %s', e)
+    def _load_cached_rules(self) -> None:
+        """加载分类器缓存。
+
+        旧版本曾缓存平台扫描结果；Linux-first 版本不再使用这类
+        缓存，因此这里只验证文件存在性，不恢复任何旧扫描状态。
+        """
+        return None
+
+    def _save_cached_rules(self) -> None:
+        """保存分类器缓存。当前无动态扫描规则，方法保留为 no-op。"""
+        return None
 
     def should_skip(self, process_name: str, exe_path: str = '') -> bool:
         """判断该进程是否应跳过（系统黑名单 + 忽略名单）"""
@@ -386,7 +353,7 @@ class AppClassifier:
 
     def classify(self, process_name: str, window_title: str = '',
                  exe_path: str = '') -> str:
-        """分类进程（优先级：忽略 > 自定义分类 > 浏览器 > 启动器 > 游戏 > 兜底）"""
+        """分类进程（优先级：忽略 > 自定义分类 > 浏览器 > Linux 场景分类 > 兜底）"""
         proc_lower = process_name.lower()
 
         if proc_lower in SYSTEM_PROCESS_BLACKLIST:
@@ -394,31 +361,39 @@ class AppClassifier:
         if exe_path and self._config and self._config.is_ignored(exe_path):
             return 'skip'
 
-        # 用户自定义分类
+        # 用户自定义分类（最高优先级）
         if exe_path and self._config:
             custom_cat = self._config.get_custom_category_for_exe(exe_path)
             if custom_cat:
                 return custom_cat['name']
 
+        # 浏览器（跨平台）
         if proc_lower in self.browsers:
             return 'browser'
-        if proc_lower in GAME_LAUNCHERS:
-            return 'other'
-        # 动态扫描游戏库（Steam/米哈游）
-        if proc_lower in self.steam_games or proc_lower in self.extra_games:
-            return 'game'
-        # 静态白名单兜底（KNOWN_GAMES）
-        if proc_lower in KNOWN_GAMES:
-            return 'game'
-        return 'other'
 
-    def get_game_name(self, process_name: str) -> str:
-        proc_lower = process_name.lower()
-        if proc_lower in self.steam_games:
-            return self.steam_games[proc_lower]
-        if proc_lower in self.extra_games:
-            return self.extra_games[proc_lower]
-        return process_name.replace('.exe', '')
+        # ---- Linux-first 分类（按使用场景优先级） ----
+        if proc_lower in DEVELOPMENT_PROCESSES:
+            return 'development'
+        if proc_lower in TERMINAL_PROCESSES:
+            return 'terminal'
+        if proc_lower in COMMUNICATION_PROCESSES:
+            return 'communication'
+        if proc_lower in DOCUMENTATION_PROCESSES:
+            return 'document'
+        if proc_lower in OFFICE_PROCESSES:
+            return 'document'
+        if proc_lower in DESIGN_PROCESSES:
+            return 'development'
+        if proc_lower in MEDIA_PROCESSES:
+            return 'document'
+        if proc_lower in SYSTEM_PROCESSES:
+            return 'system'
+        if proc_lower in AI_PROCESSES:
+            return 'development'
+        if proc_lower in VIRTUALIZATION_PROCESSES:
+            return 'development'
+
+        return 'other'
 
     def get_category_display_name(self, category: str) -> str:
         from .constants import CATEGORY_NAMES
@@ -428,48 +403,59 @@ class AppClassifier:
 
     def get_suggestions(self, min_seconds: float = 600,
                         top_n: int = 10) -> list[dict]:
-        """分析"其他"分类中的应用，返回分类建议列表
-        
-        建议条件：累计使用时长 >= min_seconds（默认 10 分钟）
-        按使用时长从高到低排序，最多返回 top_n 条。
-        """
+        """分析“其他”分类中的应用，返回可直接展示的分类建议列表。"""
+        suggestions: list[dict] = []
         if not self._config:
-            return []
-        suggestions = []
+            return suggestions
+        db_path = getattr(self._config, 'db_path', None) or getattr(self._config, 'data_path', None)
+        if not db_path:
+            try:
+                from .constants import DB_PATH
+                db_path = DB_PATH
+            except Exception:
+                db_path = None
+        if not db_path:
+            return suggestions
         try:
-            # 从 data_store 获取无自定义分类的应用使用数据
-            from .data_store import DataStore
-            from .constants import DB_PATH
-            import sqlite3
-            conn = sqlite3.connect(str(DB_PATH))
-            cur = conn.cursor()
-            # 查找存在于其他分类但无自定义分类的应用
-            cur.execute('''
-                SELECT u.app_name, u.duration_seconds, u.exe_path
-                FROM usage_records u
-                WHERE u.category = 'other'
-                  AND u.app_name NOT IN (
-                      SELECT DISTINCT a.app_name FROM app_category_rules cr
-                      JOIN custom_categories cc ON cr.category_id = cc.id
-                      JOIN usage_records a ON a.exe_path = cr.exe_path
-                  )
-                  AND u.duration_seconds >= ?
-                ORDER BY u.duration_seconds DESC
+            db_path = Path(db_path).expanduser()
+            if not db_path.exists():
+                return suggestions
+            sql = """
+                SELECT app_name, COALESCE(category, '') AS category,
+                       SUM(duration_seconds) AS total_seconds, COALESCE(exe_path, '') AS exe_path
+                FROM usage_records
+                GROUP BY app_name, category, exe_path
+                HAVING total_seconds >= ?
+                ORDER BY total_seconds DESC
                 LIMIT ?
-            ''', (min_seconds, top_n))
-            rows = cur.fetchall()
-            conn.close()
-            for app_name, secs, exe_path in rows:
+            """
+            with sqlite3.connect(str(db_path)) as conn:
+                rows = conn.execute(sql, (min_seconds, top_n * 4)).fetchall()
+            seen: set[tuple[str, str]] = set()
+            for app_name, current_category, secs, exe_path in rows:
+                if not app_name:
+                    continue
+                guessed = self.classify(app_name, app_name, exe_path or '')
+                # Only suggest actionable items: blank/other rows that can move to a concrete category,
+                # or rows where the classifier changed its mind.
+                if guessed in {'skip', 'other'}:
+                    continue
+                if current_category and current_category != 'other' and guessed == current_category:
+                    continue
+                key = (app_name.lower(), (exe_path or '').lower())
+                if key in seen:
+                    continue
+                seen.add(key)
                 suggestions.append({
                     'app_name': app_name,
                     'exe_path': exe_path or '',
-                    'duration_seconds': secs,
-                    'category': 'other',
+                    'duration_seconds': float(secs or 0),
+                    'category': current_category or 'other',
+                    'suggested_category': guessed,
+                    'suggested_category_name': self.get_category_display_name(guessed),
                 })
+                if len(suggestions) >= top_n:
+                    break
         except Exception as e:
             logger.warning('获取分类建议失败: %s', e)
         return suggestions
-
-    @property
-    def all_game_exes(self) -> Set[str]:
-        return self.steam_games | set(self.extra_games.keys())

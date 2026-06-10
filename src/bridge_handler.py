@@ -36,6 +36,7 @@ class BridgeHandler:
         self._http_server = None
         self._config_manager = None
         self._data_store = None
+        self._classifier = None
         self._exe_path = ''
 
     # ── ignore 处理（复用） ──────────────────────────────
@@ -124,6 +125,13 @@ class BridgeHandler:
         self._config_manager = config_manager
         self._data_store = data_store
         self._exe_path = exe_path
+        if config_manager is not None:
+            try:
+                from .app_classifier import AppClassifier
+                self._classifier = AppClassifier(config_manager)
+            except Exception as e:
+                logger.warning('分类器初始化失败，分类建议接口将返回空列表: %s', e)
+                self._classifier = None
         bridge = self
         bridge._http_alive = threading.Event()
         bridge._http_alive.set()  # assume alive until proven otherwise
@@ -157,8 +165,8 @@ class BridgeHandler:
                 if path.startswith('/static/'):
                     return self._serve_static(path)
 
-                # API: 获取配置
-                if path == '/api/config':
+                # API: 获取配置（/api/settings 保留为兼容别名）
+                if path in ('/api/config', '/api/settings'):
                     return self._api_get_config()
 
                 # API: 获取应用分类列表
@@ -169,9 +177,9 @@ class BridgeHandler:
                 if path == '/api/ignore':
                     return self._api_get_ignore()
 
-                # API: 游戏目录
-                if path == '/api/games':
-                    return self._api_get_games()
+                # API: 项目目录
+                if path == '/api/projects':
+                    return self._api_get_projects()
 
                 # API: 浏览器规则
                 if path == '/api/browsers':
@@ -208,9 +216,9 @@ class BridgeHandler:
                 if path == '/api/processes':
                     return self._api_get_processes()
 
-                # API: 分类器识别的游戏列表（供游戏页面显示）
-                if path == '/api/classifier-games':
-                    return self._api_get_classifier_games()
+                # API: 分类器建议列表（供项目页面显示）
+                if path == '/api/classifier-suggestions':
+                    return self._api_get_classifier_suggestions()
 
                 # API: 打开反馈文件夹
                 if path == '/api/feedback/open-dir':
@@ -240,7 +248,7 @@ class BridgeHandler:
                 p = urllib.parse.urlparse(self.path)
                 path = p.path
 
-                if path == '/api/config':
+                if path in ('/api/config', '/api/settings'):
                     return self._api_post_config()
 
                 if path == '/api/ignore':
@@ -249,8 +257,8 @@ class BridgeHandler:
                 if path == '/api/apps':
                     return self._api_post_apps()
 
-                if path == '/api/games':
-                    return self._api_post_games()
+                if path == '/api/projects':
+                    return self._api_post_projects()
 
                 if path == '/api/browsers':
                     return self._api_post_browsers()
@@ -515,35 +523,35 @@ class BridgeHandler:
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
-            def _api_get_games(self):
+            def _api_get_projects(self):
                 try:
                     cfg = bridge._config_manager
                     self._respond(200, {
                         'ok': True,
-                        'game_dirs': cfg.game_dirs if cfg else [],
+                        'project_dirs': cfg.project_dirs if cfg else [],
                     })
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
-            def _api_post_games(self):
+            def _api_post_projects(self):
                 try:
                     body = self._read_body()
                     action = body.get('action', '')
                     cfg = bridge._config_manager
                     if action == 'add_dir':
                         d = body.get('dir', '')
-                        if cfg and d and d not in cfg.game_dirs:
-                            cfg.game_dirs.append(d)
-                            cfg.save()
+                        if cfg and cfg.add_project_dir(d):
                             self._respond(200, {'ok': True})
                         else:
                             self._respond(400, {'ok': False, 'msg': '参数错误'})
                     elif action == 'remove_dir':
                         d = body.get('dir', '')
-                        if cfg:
-                            cfg.game_dirs = [x for x in cfg.game_dirs if x != d]
-                            cfg.save()
+                        if cfg and cfg.remove_project_dir(d):
                             self._respond(200, {'ok': True})
+                        elif cfg:
+                            self._respond(200, {'ok': True})
+                        else:
+                            self._respond(400, {'ok': False, 'msg': '参数错误'})
                     else:
                         self._respond(400, {'ok': False, 'msg': '未知 action'})
                 except Exception as e:
@@ -797,11 +805,11 @@ class BridgeHandler:
             def _api_open_feedback_dir(self):
                 """打开反馈文件夹"""
                 try:
-                    import os
                     from .constants import FEEDBACK_DIR
+                    from .platform_utils import open_path
                     FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
-                    os.startfile(str(FEEDBACK_DIR))
-                    self._respond(200, {'ok': True})
+                    ok = open_path(FEEDBACK_DIR)
+                    self._respond(200, {'ok': ok})
                 except Exception as e:
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
@@ -848,48 +856,20 @@ class BridgeHandler:
                     logger.error('API /processes 失败: %s', e)
                     self._respond(500, {'ok': False, 'msg': str(e)})
 
-            def _api_get_classifier_games(self):
-                """返回用户电脑上实际存在的已识别游戏（排除启动器）"""
+            def _api_get_classifier_suggestions(self):
+                """返回当前运行应用的 Linux-first 分类建议。"""
                 try:
-                    games = []
-                    import psutil
-                    from .app_classifier import KNOWN_GAMES, GAME_LAUNCHERS
-                    # 收集当前运行中的 exe
-                    running = set()
-                    try:
-                        for p in psutil.process_iter(['name']):
-                            try:
-                                running.add(p.info['name'].lower())
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                continue
-                    except Exception:
-                        pass
-                    # 也检查 Steam 缓存中的游戏
-                    from .constants import STEAM_CACHE_PATH
-                    import json as _json
-                    cached = {}
-                    if STEAM_CACHE_PATH.exists():
-                        try:
-                            with open(STEAM_CACHE_PATH, 'r', encoding='utf-8') as _f:
-                                _data = _json.load(_f)
-                            cached = _data.get('games', {})
-                            if isinstance(cached, list):
-                                cached = {e: e.replace('.exe', '') for e in cached}
-                        except Exception:
-                            pass
-                    all_known = dict(cached)
-                    all_known.update(KNOWN_GAMES)
-                    # 排除启动器
-                    for exe in GAME_LAUNCHERS:
-                        all_known.pop(exe, None)
-                    # 只返回正在运行的游戏
-                    for exe, name in sorted(all_known.items(), key=lambda x: x[1]):
-                        if exe.lower() in running:
-                            games.append({'exe': exe, 'name': name})
-                    self._respond(200, {'ok': True, 'games': games})
+                    classifier = getattr(bridge, '_classifier', None)
+                    if classifier is None and bridge._config_manager is not None:
+                        from .app_classifier import AppClassifier
+                        classifier = AppClassifier(bridge._config_manager)
+                        bridge._classifier = classifier
+                    suggestions = classifier.get_suggestions() if classifier else []
+                    self._respond(200, {'ok': True, 'suggestions': suggestions})
                 except Exception as e:
-                    logger.error('API /classifier-games 失败: %s', e)
+                    logger.error('API /classifier-suggestions 失败: %s', e)
                     self._respond(500, {'ok': False, 'msg': str(e)})
+
             def log_message(self, fmt, *args):
                 logger.debug('bridge-http: ' + fmt, *args)
 
@@ -899,12 +879,11 @@ class BridgeHandler:
             logger.info('Bridge HTTP 服务已启动 (127.0.0.1:%d)', _BRIDGE_PORT)
         except OSError as e:
             logger.warning('Bridge HTTP 启动失败（端口被占用，跳过）: %s', e)
-            import ctypes
-            ctypes.windll.user32.MessageBoxW(
-                0,
+            from .platform_utils import show_message
+            show_message(
+                'UsageTracker - 启动失败',
                 f'UsageTracker HTTP 服务启动失败，端口 {_BRIDGE_PORT} 可能被占用。\n\n'
                 f'请先关闭其他 UsageTracker 实例后重试。\n错误: {e}',
-                'UsageTracker - 启动失败',
                 0x40
             )
             return
@@ -961,3 +940,19 @@ class BridgeHandler:
                 self._http_server.shutdown()
             except Exception:
                 pass
+
+
+class BridgeRequestHandler(BaseHTTPRequestHandler):
+    """Import-time compatible request handler contract.
+
+    The runtime HTTP server builds a closure-bound handler inside
+    :meth:`BridgeHandler.start_http_server` so it can access the active bridge
+    instance.  This lightweight class keeps the public import contract stable
+    for verification tools without starting a server or requiring a bridge.
+    """
+
+    def do_GET(self):
+        self.send_error(404, 'Bridge handler is bound at runtime')
+
+    def do_POST(self):
+        self.send_error(404, 'Bridge handler is bound at runtime')

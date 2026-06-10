@@ -1,6 +1,6 @@
 """
 通知模块
-- PowerShell Toast 通知（唯一通知方式，移除 plyer）
+- 跨平台桌面通知（Linux 走 notify-send，Windows 走 Toast/系统辅助）
 - 满 60 分钟首次提醒，之后每 30 分钟再次提醒
 """
 
@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from .i18n import t
+from .platform_utils import send_notification
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +38,32 @@ class UsageNotifier:
         self.alert_states: Dict[str, AppAlertState] = {}
         self._lock = threading.Lock()
 
+    @staticmethod
+    def check_available() -> Dict:
+        """非破坏性检查通知能力；不实际发送通知。"""
+        from shutil import which
+        import platform
+        system = platform.system().lower()
+        if system == 'linux':
+            notify_send = which('notify-send')
+            return {
+                'platform': 'linux',
+                'available': bool(notify_send),
+                'backend': 'notify-send',
+                'command': notify_send or '',
+                'display': bool(__import__('os').environ.get('DISPLAY') or __import__('os').environ.get('WAYLAND_DISPLAY')),
+            }
+        if system == 'windows':
+            return {'platform': 'windows', 'available': True, 'backend': 'toast'}
+        if system == 'darwin':
+            return {'platform': 'darwin', 'available': bool(which('osascript')), 'backend': 'osascript'}
+        return {'platform': system or 'unknown', 'available': False, 'backend': 'unsupported'}
+
     def update_usage(self, category: str, duration_seconds: float) -> list[str]:
         """更新使用时长并检查是否需要提醒，返回触发的消息列表"""
         alerts: list[str] = []
         with self._lock:
-            if category not in ('browser', 'game'):
+            if category not in ('browser', 'development'):
                 return alerts
             if category not in self.alert_states:
                 self.alert_states[category] = AppAlertState(category=category)
@@ -72,8 +94,8 @@ class UsageNotifier:
 
     def _send_notification(self, category: str, message: str) -> None:
         title = t('notifier.title')
-        if not self._send_powershell_toast(title, message):
-            logger.warning('Toast 通知发送失败')
+        if not send_notification(title, message):
+            logger.warning('通知发送失败: %s - %s', category, message)
 
     @staticmethod
     def _xml_escape(s: str) -> str:

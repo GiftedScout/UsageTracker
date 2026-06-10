@@ -52,9 +52,9 @@
                     <span class="nav-icon">&#127760;</span>
                     <span class="nav-label" data-i18n="nav.browsers">浏览器</span>
                 </a>
-                <a href="#" class="nav-item" data-tab="games">
-                    <span class="nav-icon">&#127918;</span>
-                    <span class="nav-label" data-i18n="nav.games">游戏</span>
+                <a href="#" class="nav-item" data-tab="projects">
+                    <span class="nav-icon">&#128193;</span>
+                    <span class="nav-label" data-i18n="nav.projects">项目</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="ignore">
                     <span class="nav-icon">&#128683;</span>
@@ -182,16 +182,16 @@
                 </div>
             </section>
 
-            <!-- Games Tab -->
-            <section id="tab-games" class="tab-content">
-                <h2 data-i18n="games.title">游戏目录</h2>
-                <p class="desc" data-i18n="games.desc">配置游戏可执行文件所在目录（Steam 游戏自动扫描无需手动添加）</p>
+            <!-- Projects Tab -->
+            <section id="tab-projects" class="tab-content">
+                <h2 data-i18n="projects.title">项目目录</h2>
+                <p class="desc" data-i18n="projects.desc">配置常用开发/工作项目目录，用于后续 Linux-first 项目上下文分析。</p>
                 <div class="card">
-                    <div id="game-dirs-list"></div>
-                    <div id="detected-games" style="margin:10px 0;padding:10px;border-radius:8px;background:var(--bg-primary);font-size:12px;color:var(--text-secondary);"></div>
+                    <div id="project-dirs-list"></div>
+                    <div id="classifier-suggestions" style="margin:10px 0;padding:10px;border-radius:8px;background:var(--bg-primary);font-size:12px;color:var(--text-secondary);"></div>
                     <div class="inline-form">
-                        <input type="text" id="new-game-dir" placeholder="Game directory (e.g. D:\Steam\steamapps\common)" data-i18n-placeholder="games.dir_placeholder">
-                        <button class="btn btn-primary" id="btn-add-game-dir" data-i18n="btn.add">添加</button>
+                        <input type="text" id="new-project-dir" placeholder="Project directory (e.g. /home/me/src/my-project)" data-i18n-placeholder="projects.dir_placeholder">
+                        <button class="btn btn-primary" id="btn-add-project-dir" data-i18n="btn.add">添加</button>
                     </div>
                 </div>
             </section>
